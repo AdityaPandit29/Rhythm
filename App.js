@@ -1,20 +1,92 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { StatusBar } from "expo-status-bar";
+import { StyleSheet, Text, View } from "react-native";
+import Dashboard from "./src/screens/Dashboard";
+import Habits from "./src/screens/Habits";
+import Routines from "./src/screens/Routines";
+import Tasks from "./src/screens/Tasks";
+import { NavigationContainer } from "@react-navigation/native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+
+const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Tab.Navigator
+        initialRouteName="Dashboard"
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: "#6C63FF",
+          tabBarInactiveTintColor: "#A1A1A1",
+          tabBarLabelStyle: { fontSize: 12, fontWeight: "500" },
+          tabBarIconStyle: { height: 28, width: 28 },
+          tabBarItemStyle: {
+            paddingVertical: 4,
+          },
+          tabBarStyle: {
+            backgroundColor: "rgba(255, 255, 255, 0.85)",
+            borderTopColor: "rgba(0,0,0,0.08)",
+            borderTopWidth: 1,
+            elevation: 0,
+            height: 106,
+          },
+        }}
+      >
+        <Tab.Screen
+          name="Dashboard"
+          component={Dashboard}
+          options={{
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons
+                name="view-dashboard-outline"
+                size={28}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Routines"
+          component={Routines}
+          options={{
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons
+                name="calendar-range"
+                size={28}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Habits"
+          component={Habits}
+          options={{
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons
+                name="progress-check"
+                size={28}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Tasks"
+          component={Tasks}
+          options={{
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons
+                name="bullseye-arrow"
+                size={28}
+                color={color}
+              />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
