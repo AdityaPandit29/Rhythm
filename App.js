@@ -9,6 +9,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import RoutinesStack from "./src/screens/RoutineStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -51,7 +52,7 @@ export default function App() {
           />
           <Tab.Screen
             name="Routines"
-            component={Routines}
+            component={RoutinesStack}
             options={{
               tabBarIcon: ({ color }) => (
                 <MaterialCommunityIcons

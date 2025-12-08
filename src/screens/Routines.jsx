@@ -7,8 +7,10 @@ import {
   ScrollView,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useNavigation } from "@react-navigation/native";
 
 export default function Routines() {
+  const navigation = useNavigation();
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -20,7 +22,10 @@ export default function Routines() {
         </View>
 
         {/* -------- ADD ROUTINE BUTTON -------- */}
-        <TouchableOpacity style={styles.addRoutineBtn}>
+        <TouchableOpacity
+          style={styles.addRoutineBtn}
+          onPress={() => navigation.navigate("EditRoutine", { mode: "add" })}
+        >
           <MaterialCommunityIcons name="plus" size={20} color="#6C63FF" />
           <Text style={styles.addRoutineText}>Add Busy Time Block</Text>
         </TouchableOpacity>
@@ -39,7 +44,11 @@ export default function Routines() {
           </View>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("EditRoutine", { mode: "edit" })
+              }
+            >
               <Text style={styles.editText}>Edit</Text>
             </TouchableOpacity>
 
@@ -63,7 +72,11 @@ export default function Routines() {
           </View>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("EditRoutine", { mode: "add" })
+              }
+            >
               <Text style={styles.editText}>Edit</Text>
             </TouchableOpacity>
 
