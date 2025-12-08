@@ -1,0 +1,1 @@
+1. Add tab navigation in tasks screen for All, monthly, weekly and one - time tasks.

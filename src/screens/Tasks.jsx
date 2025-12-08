@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
+import TaskCard from "../components/TaskCard";
 
 export default function Tasks() {
   const navigation = useNavigation();
@@ -33,49 +34,31 @@ export default function Tasks() {
           <Text style={styles.addTaskText}>Add Task</Text>
         </TouchableOpacity>
 
-        {/* TASK CARD 1 */}
-        <Pressable style={styles.taskCard}>
-          <Text style={styles.taskTitle}>Complete Assignment</Text>
+        <TaskCard
+          id={1}
+          name="Complete Assignment"
+          due="Today 5:00 pm"
+          isMonthly={false}
+          duration="45 min"
+          priority="High"
+          isAutomatic={true}
+          scheduleTime="3:00 PM - 3:45 PM"
+          onReschedule={() => console.log("Reschedule")}
+          onDone={() => console.log("Done!")}
+        />
 
-          <Text style={styles.taskSub}>
-            Due: Today 5:00 PM | Priority: High
-          </Text>
-
-          <Text style={styles.taskDuration}>Duration: 45 min</Text>
-
-          <Text style={styles.taskSchedule}>Scheduled: 3:00 PM – 3:45 PM</Text>
-
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.rescheduleBtn}>
-              <Text style={styles.rescheduleText}>Reschedule</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.doneBtn}>
-              <Text style={styles.doneText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-
-        {/* TASK CARD 2 */}
-        <Pressable style={styles.taskCard}>
-          <Text style={styles.taskTitle}>Monthly Fee Payment</Text>
-
-          <Text style={styles.taskSub}>Monthly Task</Text>
-
-          <Text style={styles.taskDuration}>Duration: 10 min</Text>
-
-          <Text style={styles.taskSchedule}>Suggested: 6:00 PM</Text>
-
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.acceptBtn}>
-              <Text style={styles.acceptText}>Accept</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.rescheduleBtn}>
-              <Text style={styles.rescheduleText}>Reschedule</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
+        <TaskCard
+          id={2}
+          name="Monthly Fee Payment"
+          due="Tomorrow 6:00 pm"
+          isMonthly={true}
+          duration="45 min"
+          priority="Low"
+          isAutomatic={false}
+          scheduleTime="6:00 PM"
+          onReschedule={() => console.log("Reschedule")}
+          onDone={() => console.log("Done!")}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -95,7 +78,7 @@ const styles = StyleSheet.create({
 
   headerTitle: {
     fontSize: 20,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#333",
   },
 
@@ -112,7 +95,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: 12,
-    borderWidth: 1.3,
+    borderWidth: 1.5,
     borderColor: "#6C63FF",
     backgroundColor: "#FFFFFF",
     marginBottom: 20,
@@ -136,12 +119,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
+
+    position: "relative",
+  },
+
+  editIcon: {
+    position: "absolute",
+    right: 16,
+    top: 16,
+    padding: 6,
   },
 
   taskTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "#333",
+    paddingRight: 35, // space for edit icon
   },
 
   taskSub: {
@@ -169,17 +162,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
 
+  /* BUTTON STYLES */
   rescheduleBtn: {
     borderWidth: 1.2,
     borderColor: "#6C63FF",
     borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
 
   rescheduleText: {
     color: "#6C63FF",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
   },
 
@@ -187,27 +181,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.2,
     borderColor: "#4CAF50",
     borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
 
   doneText: {
     color: "#4CAF50",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-
-  acceptBtn: {
-    borderWidth: 1.2,
-    borderColor: "#4CAF50",
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-
-  acceptText: {
-    color: "#4CAF50",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
   },
 });
