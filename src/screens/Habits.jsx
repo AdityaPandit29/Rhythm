@@ -8,8 +8,10 @@ import {
   Pressable,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useNavigation } from "@react-navigation/native";
 
 export default function Habits() {
+  const navigation = useNavigation();
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
@@ -22,13 +24,19 @@ export default function Habits() {
         showsVerticalScrollIndicator={false}
       >
         {/* ADD HABIT BUTTON */}
-        <TouchableOpacity style={styles.addHabitBtn}>
+        <TouchableOpacity
+          style={styles.addHabitBtn}
+          onPress={() => navigation.navigate("EditHabit")}
+        >
           <MaterialCommunityIcons name="plus" size={20} color="#6C63FF" />
           <Text style={styles.addHabitText}>Add Habit</Text>
         </TouchableOpacity>
 
         {/* HABIT CARD 1 */}
-        <Pressable style={styles.habitCard} onPress={() => {}}>
+        <Pressable
+          style={styles.habitCard}
+          onPress={() => navigation.navigate("EditHabit")}
+        >
           <Text style={styles.habitName}>Reading</Text>
           <Text style={styles.habitType}>Fixed Time • 7:00 PM</Text>
           <Text style={styles.habitDuration}>Duration: 20 min</Text>
@@ -40,7 +48,10 @@ export default function Habits() {
         </Pressable>
 
         {/* HABIT CARD 2 */}
-        <Pressable style={styles.habitCard} onPress={() => {}}>
+        <Pressable
+          style={styles.habitCard}
+          onPress={() => navigation.navigate("EditHabit")}
+        >
           <Text style={styles.habitName}>Meditation</Text>
           <Text style={styles.habitType}>Flexible</Text>
           <Text style={styles.habitDuration}>Duration: 15 min</Text>

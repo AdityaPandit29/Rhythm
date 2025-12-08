@@ -10,6 +10,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import RoutinesStack from "./src/screens/RoutineStack";
+import HabitsStack from "./src/screens/HabitsStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -41,6 +42,7 @@ export default function App() {
             name="Dashboard"
             component={Dashboard}
             options={{
+              title: "Dashboard",
               tabBarIcon: ({ color }) => (
                 <MaterialCommunityIcons
                   name="view-dashboard-outline"
@@ -51,9 +53,10 @@ export default function App() {
             }}
           />
           <Tab.Screen
-            name="Routines"
+            name="RoutinesStack"
             component={RoutinesStack}
             options={{
+              title: "Routines",
               tabBarIcon: ({ color }) => (
                 <MaterialCommunityIcons
                   name="calendar-range"
@@ -64,9 +67,10 @@ export default function App() {
             }}
           />
           <Tab.Screen
-            name="Habits"
-            component={Habits}
+            name="HabitsStack"
+            component={HabitsStack}
             options={{
+              title: "Habits",
               tabBarIcon: ({ color }) => (
                 <MaterialCommunityIcons
                   name="progress-check"
@@ -80,6 +84,7 @@ export default function App() {
             name="Tasks"
             component={Tasks}
             options={{
+              title: "Tasks",
               tabBarIcon: ({ color }) => (
                 <MaterialCommunityIcons
                   name="bullseye-arrow"

@@ -178,6 +178,7 @@ export default function EditRoutine() {
           <Text style={styles.label}>Label (optional)</Text>
           <TextInput
             style={styles.input}
+            placeholderTextColor="#999"
             placeholder="e.g. Office, Gym, Study"
             value={label}
             onChangeText={setLabel}
@@ -282,12 +283,11 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: "#F7F7FF",
     padding: 14,
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    fontSize: 16,
+    borderRadius: 12,
+    fontSize: 15,
+    color: "#333",
   },
 
   timeRow: {
@@ -361,9 +361,9 @@ const styles = StyleSheet.create({
   },
 
   saveBtn: {
-    backgroundColor: "#111111",
+    backgroundColor: "#6C63FF",
     paddingVertical: 16,
-    borderRadius: 20,
+    borderRadius: 14,
   },
 
   saveBtnText: {
