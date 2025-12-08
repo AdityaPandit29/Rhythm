@@ -28,7 +28,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
  * - Save action currently calls navigation.goBack({ routine }) — replace with API/DB call as needed.
  */
 
-const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // displayed labels
+const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
 
 export default function EditRoutine() {
   const navigation = useNavigation();
@@ -210,7 +210,7 @@ export default function EditRoutine() {
 
         {/* Days */}
         <View style={styles.section}>
-          <Text style={styles.label}>Repeat</Text>
+          <Text style={styles.label}>Repeat On</Text>
           <View style={styles.daysRow}>
             {WEEK_DAYS.map((d, i) => {
               const selected = days[i];
@@ -219,7 +219,7 @@ export default function EditRoutine() {
                   key={i}
                   onPress={() => toggleDay(i)}
                   style={[
-                    styles.dayChip,
+                    styles.dayBubble,
                     selected ? styles.dayChipActive : null,
                   ]}
                 >
@@ -328,19 +328,16 @@ const styles = StyleSheet.create({
 
   daysRow: {
     flexDirection: "row",
-    marginTop: 8,
-    flexWrap: "wrap",
-    gap: 10,
+    justifyContent: "space-between",
   },
 
-  dayChip: {
-    width: 44,
-    height: 44,
-    borderRadius: 44,
-    backgroundColor: "#F1F1F1",
+  dayBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 20,
+    backgroundColor: "#F7F7FF",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 8,
   },
 
   dayChipActive: {
@@ -348,7 +345,7 @@ const styles = StyleSheet.create({
   },
 
   dayText: {
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#333",
   },
 

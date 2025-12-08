@@ -120,7 +120,69 @@ export default function EditTask() {
           </View>
         </View>
 
-        {/* DURATION */}
+        {/* TIME MODE SELECTOR */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Schedule Mode</Text>
+
+          <View style={styles.modeRow}>
+            {/* MANUAL MODE */}
+            <Pressable
+              style={styles.modeOption}
+              // TODO: set state: setMode("manual")
+            >
+              <MaterialCommunityIcons
+                name="clock-edit-outline"
+                size={20}
+                color="#6C63FF"
+              />
+              <Text style={styles.modeText}>Manual Time</Text>
+            </Pressable>
+
+            {/* AUTOMATIC MODE */}
+            <Pressable
+              style={styles.modeOption}
+              // TODO: set state: setMode("auto")
+            >
+              <MaterialCommunityIcons name="brain" size={20} color="#6C63FF" />
+              <Text style={styles.modeText}>Automatic</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* MANUAL TIME PICKERS */}
+        {/* TODO: Render this only if mode === "manual" */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Select Time</Text>
+
+          <View style={styles.timeRow}>
+            <TouchableOpacity
+              style={styles.timeBlock}
+              // TODO: open start time picker
+            >
+              <Text style={styles.timeText}>Start Time</Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={20}
+                color="#444"
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.timeBlock}
+              // TODO: open end time picker
+            >
+              <Text style={styles.timeText}>End Time</Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={20}
+                color="#444"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* AUTOMATIC MODE DURATION INPUT */}
+        {/* TODO: Render this only if mode === "auto" */}
         <View style={styles.section}>
           <Text style={styles.label}>Duration (minutes)</Text>
           <TextInput
@@ -128,7 +190,7 @@ export default function EditTask() {
             placeholder="e.g. 45"
             placeholderTextColor="#999"
             keyboardType="numeric"
-            // TODO: Add logic to update duration
+            // TODO: setDuration
           />
         </View>
 
@@ -242,6 +304,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#333",
+  },
+
+  /* TIME MODE SELECTOR */
+  modeRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+
+  modeOption: {
+    flex: 1,
+    backgroundColor: "#F7F7FF",
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  modeText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+
+  timeRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  timeBlock: {
+    flex: 1,
+    backgroundColor: "#F7F7FF",
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 
   /* SAVE BUTTON */

@@ -14,9 +14,13 @@ import { useNavigation } from "@react-navigation/native";
 export default function EditHabit() {
   const navigation = useNavigation();
 
+  // TODO: Add states later (habitName, type, startTime, duration, weekdays)
+
   const validateAndSave = () => {
+    // TODO: Validate fields, save habit, update store
     navigation.goBack();
   };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -29,25 +33,26 @@ export default function EditHabit() {
           <Text style={styles.subtitle}>Update your habit details.</Text>
         </View>
 
+        {/* HABIT NAME */}
         <View style={styles.section}>
-          {/* HABIT NAME INPUT */}
           <Text style={styles.label}>Habit Name</Text>
           <TextInput
             style={styles.input}
             placeholder="Enter habit name"
             placeholderTextColor="#999"
-            // TODO: Add onChangeText to update habit name
+            // TODO: onChangeText
           />
         </View>
 
+        {/* TYPE SELECTOR */}
         <View style={styles.section}>
-          {/* TYPE SELECTOR (Fixed Time / Flexible) */}
           <Text style={styles.label}>Type</Text>
+
           <View style={styles.typeRow}>
             {/* FIXED TIME */}
             <Pressable
               style={styles.typeOption}
-              // TODO: Add select logic (set type = fixed)
+              // TODO: Add type = "fixed"
             >
               <MaterialCommunityIcons
                 name="clock-time-four"
@@ -60,7 +65,7 @@ export default function EditHabit() {
             {/* FLEXIBLE */}
             <Pressable
               style={styles.typeOption}
-              // TODO: Add select logic (set type = flexible)
+              // TODO: Add type = "flexible"
             >
               <MaterialCommunityIcons
                 name="infinity"
@@ -72,12 +77,12 @@ export default function EditHabit() {
           </View>
         </View>
 
+        {/* START TIME — only for FIXED type */}
         <View style={styles.section}>
-          {/* FIXED TIME PICKER (Only visible if user selects "Fixed") */}
           <Text style={styles.label}>Start Time</Text>
           <TouchableOpacity
             style={styles.timePicker}
-            // TODO: open time picker using expo-datetime-picker
+            // TODO: open expo-datetime-picker
           >
             <Text style={styles.timeText}>7:00 PM</Text>
             <MaterialCommunityIcons
@@ -88,25 +93,37 @@ export default function EditHabit() {
           </TouchableOpacity>
         </View>
 
+        {/* DURATION */}
         <View style={styles.section}>
-          {/* DURATION INPUT */}
           <Text style={styles.label}>Duration (minutes)</Text>
           <TextInput
             style={styles.input}
             placeholder="e.g. 20"
             placeholderTextColor="#999"
             keyboardType="numeric"
-            // TODO: Add logic to update duration value
+            // TODO: Add logic to update duration
           />
+        </View>
+
+        {/* WEEKDAY SELECTOR */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Repeat On</Text>
+          <View style={styles.daysRow}>
+            {["M", "T", "W", "T", "F", "S", "S"].map((d, index) => (
+              <Pressable
+                key={index}
+                style={styles.dayBubble}
+                // TODO: toggle weekday selection
+              >
+                <Text style={styles.dayText}>{d}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* SAVE BUTTON */}
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={validateAndSave}
-            // TODO: Add onPress to save habit and navigate back
-          >
+          <TouchableOpacity style={styles.saveBtn} onPress={validateAndSave}>
             <Text style={styles.saveBtnText}>Save Habit</Text>
           </TouchableOpacity>
         </View>
@@ -114,6 +131,8 @@ export default function EditHabit() {
     </SafeAreaView>
   );
 }
+
+/* -------------------------------- STYLES -------------------------------- */
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -197,6 +216,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
     fontWeight: "500",
+  },
+
+  /* WEEKDAY SELECTOR */
+  daysRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  dayBubble: {
+    backgroundColor: "#F7F7FF",
+    width: 38,
+    height: 38,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  dayText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
   },
 
   /* SAVE BUTTON */
