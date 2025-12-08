@@ -2,15 +2,13 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import Dashboard from "./src/screens/Dashboard";
-import Habits from "./src/screens/Habits";
-import Routines from "./src/screens/Routines";
-import Tasks from "./src/screens/Tasks";
 import { NavigationContainer } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import RoutinesStack from "./src/screens/RoutineStack";
 import HabitsStack from "./src/screens/HabitsStack";
+import TasksStack from "./src/screens/TasksStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -81,8 +79,8 @@ export default function App() {
             }}
           />
           <Tab.Screen
-            name="Tasks"
-            component={Tasks}
+            name="TasksStack"
+            component={TasksStack}
             options={{
               title: "Tasks",
               tabBarIcon: ({ color }) => (

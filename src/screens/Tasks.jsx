@@ -8,8 +8,11 @@ import {
   Pressable,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useNavigation } from "@react-navigation/native";
 
 export default function Tasks() {
+  const navigation = useNavigation();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
@@ -22,7 +25,10 @@ export default function Tasks() {
         showsVerticalScrollIndicator={false}
       >
         {/* ADD TASK BUTTON */}
-        <TouchableOpacity style={styles.addTaskBtn}>
+        <TouchableOpacity
+          style={styles.addTaskBtn}
+          onPress={() => navigation.navigate("EditTask")}
+        >
           <MaterialCommunityIcons name="plus" size={20} color="#6C63FF" />
           <Text style={styles.addTaskText}>Add Task</Text>
         </TouchableOpacity>

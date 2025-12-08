@@ -9,8 +9,14 @@ import {
   ScrollView,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useNavigation } from "@react-navigation/native";
 
 export default function EditHabit() {
+  const navigation = useNavigation();
+
+  const validateAndSave = () => {
+    navigation.goBack();
+  };
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -98,6 +104,7 @@ export default function EditHabit() {
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.saveBtn}
+            onPress={validateAndSave}
             // TODO: Add onPress to save habit and navigate back
           >
             <Text style={styles.saveBtnText}>Save Habit</Text>
