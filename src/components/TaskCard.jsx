@@ -1,11 +1,6 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Pressable,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 
 export default function TaskCard({
@@ -22,6 +17,12 @@ export default function TaskCard({
 }) {
   const navigation = useNavigation();
 
+  const priorityColors = {
+    High: "#FF5555",
+    Medium: "#F7B801",
+    Low: "#4CAF50",
+  };
+
   return (
     <View style={styles.taskCard}>
       {/* TOP RIGHT ICONS */}
@@ -30,27 +31,31 @@ export default function TaskCard({
           style={styles.iconBtn}
           onPress={() => navigation.navigate("EditTask")}
         >
-          <MaterialCommunityIcons name="pencil" size={22} color="#6C63FF" />
+          <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.iconBtn}>
-          <MaterialCommunityIcons name="delete" size={22} color="#D9534F" />
+          <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
       </View>
 
       {/* TITLE */}
-      <Text style={styles.taskTitle}>{name}</Text>
+      <Text style={styles.title}>{name}</Text>
 
       {/* META INFO */}
-      <Text style={styles.taskSub}>
-        {isMonthly ? "Monthly Task" : `Due: ${due}`} • Priority: {priority}
-      </Text>
-
+      <View>
+        <Text style={styles.subText}>
+          {isMonthly ? "Monthly Task" : `Due: ${due}`} • Priority: {priority}
+        </Text>
+        <Text style={styles.subText}>Scheduled: {scheduleTime}</Text>
+      </View>
       {/* DURATION */}
-
-      <Text style={styles.duration}>Duration: {duration}</Text>
-      {/* DURATION + TIME */}
-      <Text style={styles.taskSchedule}>Scheduled: {scheduleTime}</Text>
+      <View style={styles.durationRow}>
+        <Entypo name="stopwatch" size={16} color="#555" />
+        <Text style={styles.durationText}>Duration: {duration}</Text>
+      </View>
+      {/* SCHEDULED TIME */}
+      {/* <Text style={styles.taskSchedule}>Scheduled: {scheduleTime}</Text> */}
 
       {/* BUTTONS */}
       <View style={styles.btnRow}>
@@ -69,12 +74,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
-    elevation: 3,
+    marginBottom: 18,
+    elevation: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    position: "relative",
   },
 
   iconRow: {
@@ -86,39 +92,50 @@ const styles = StyleSheet.create({
   },
 
   iconBtn: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F4F4F5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 10,
   },
 
-  taskTitle: {
+  title: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#333",
-    paddingRight: 30,
+    color: "#111",
+    paddingRight: 70,
+    marginBottom: 10,
   },
 
-  taskSub: {
-    marginTop: 6,
+  subText: {
     fontSize: 13,
-    color: "#6F6F6F",
+    color: "#777",
   },
 
-  duration: {
-    marginTop: 6,
+  durationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    gap: 6,
+  },
+
+  durationText: {
     fontSize: 14,
+    fontWeight: "500",
     color: "#444",
   },
 
   taskSchedule: {
-    marginTop: 10,
-    fontSize: 13,
-    color: "#6F6F6F",
+    marginTop: 6,
+    fontSize: 14,
+    color: "#555",
   },
 
   btnRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 16,
   },
 
   rescheduleBtn: {
@@ -131,20 +148,6 @@ const styles = StyleSheet.create({
 
   rescheduleText: {
     color: "#6C63FF",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-
-  doneBtn: {
-    borderWidth: 1.2,
-    borderColor: "#4CAF50",
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-
-  doneText: {
-    color: "#4CAF50",
     fontWeight: "600",
     fontSize: 13,
   },

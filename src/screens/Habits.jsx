@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
+import HabitCard from "../components/HabitCard";
 
 export default function Habits() {
   const navigation = useNavigation();
@@ -32,35 +33,24 @@ export default function Habits() {
           <Text style={styles.addHabitText}>Add Habit</Text>
         </TouchableOpacity>
 
-        {/* HABIT CARD 1 */}
-        <Pressable
-          style={styles.habitCard}
-          onPress={() => navigation.navigate("EditHabit")}
-        >
-          <Text style={styles.habitName}>Reading</Text>
-          <Text style={styles.habitType}>Fixed Time • 7:00 PM</Text>
-          <Text style={styles.habitDuration}>Duration: 20 min</Text>
-
-          <View style={styles.streakRow}>
-            <Text style={styles.streakText}>🔥 4 days</Text>
-            <Text style={styles.streakText}>⭐ Best: 14 days</Text>
-          </View>
-        </Pressable>
-
-        {/* HABIT CARD 2 */}
-        <Pressable
-          style={styles.habitCard}
-          onPress={() => navigation.navigate("EditHabit")}
-        >
-          <Text style={styles.habitName}>Meditation</Text>
-          <Text style={styles.habitType}>Flexible</Text>
-          <Text style={styles.habitDuration}>Duration: 15 min</Text>
-
-          <View style={styles.streakRow}>
-            <Text style={styles.streakText}>🔥 1 day</Text>
-            <Text style={styles.streakText}>⭐ Best: 5 days</Text>
-          </View>
-        </Pressable>
+        <HabitCard
+          name="Reading"
+          duration="25 min"
+          isFlexible={false}
+          scheduleTime="7:00 PM - 8:00 PM"
+          daysSelected={[true, false, true, false, true, false, false]}
+          currentStreak="4"
+          bestStreak="14"
+        />
+        <HabitCard
+          name="Meditation"
+          duration="15 min"
+          isFlexible={true}
+          scheduleTime="7:00 PM - 8:00 PM"
+          daysSelected={[true, true, true, true, true, true, true]}
+          currentStreak="1"
+          bestStreak="5"
+        />
       </ScrollView>
     </SafeAreaView>
   );
