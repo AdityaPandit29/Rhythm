@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
   ScrollView,
+  Switch,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
@@ -14,10 +15,10 @@ import { useNavigation } from "@react-navigation/native";
 export default function EditHabit() {
   const navigation = useNavigation();
 
-  // TODO: Add states later (habitName, type, startTime, duration, weekdays)
+  // 👉 ADD YOUR STATES HERE (habitName, type, duration, selectedDays, etc.)
 
   const validateAndSave = () => {
-    // TODO: Validate fields, save habit, update store
+    // 👉 VALIDATION + SAVE LOGIC HERE
     navigation.goBack();
   };
 
@@ -40,19 +41,19 @@ export default function EditHabit() {
             style={styles.input}
             placeholder="Enter habit name"
             placeholderTextColor="#999"
-            // TODO: onChangeText
+            // 👉 onChangeText here
           />
         </View>
 
         {/* TYPE SELECTOR */}
         <View style={styles.section}>
-          <Text style={styles.label}>Type</Text>
+          <Text style={styles.label}>Habit Type</Text>
 
           <View style={styles.typeRow}>
-            {/* FIXED TIME */}
+            {/* FIXED TYPE */}
             <Pressable
-              style={styles.typeOption}
-              // TODO: Add type = "fixed"
+              style={[styles.typeOption]}
+              // 👉 Add onPress=setType("fixed")
             >
               <MaterialCommunityIcons
                 name="clock-time-four"
@@ -62,10 +63,10 @@ export default function EditHabit() {
               <Text style={styles.typeText}>Fixed Time</Text>
             </Pressable>
 
-            {/* FLEXIBLE */}
+            {/* FLEXIBLE TYPE */}
             <Pressable
-              style={styles.typeOption}
-              // TODO: Add type = "flexible"
+              style={[styles.typeOption]}
+              // 👉 Add onPress=setType("flexible")
             >
               <MaterialCommunityIcons
                 name="infinity"
@@ -77,32 +78,62 @@ export default function EditHabit() {
           </View>
         </View>
 
-        {/* START TIME — only for FIXED type */}
+        {/* TOGGLE: LET RHYTHM DECIDE */}
         <View style={styles.section}>
-          <Text style={styles.label}>Start Time</Text>
-          <TouchableOpacity
-            style={styles.timePicker}
-            // TODO: open expo-datetime-picker
-          >
-            <Text style={styles.timeText}>7:00 PM</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={22}
-              color="#444"
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleText}>
+              Auto-schedule the best time for this habit
+            </Text>
+
+            <Switch
+              // 👉 Add logic: value={autoSchedule} onValueChange={setAutoSchedule}
+              trackColor={{ false: "#ccc", true: "#6C63FF" }}
+              thumbColor="#fff"
             />
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* DURATION */}
+        {/* TIME - only show when type === fixed AND autoSchedule === false. only show start time if type === flexible AND autoSchedule === false */}
         <View style={styles.section}>
-          <Text style={styles.label}>Duration (minutes)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 20"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            // TODO: Add logic to update duration
-          />
+          <Text style={styles.label}>Time</Text>
+          <View style={styles.timeRow}>
+            <TouchableOpacity style={styles.timeCard}>
+              <Text style={styles.timeSmall}>Start</Text>
+              <Text style={styles.timeLarge}>9:00 AM</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.timeCard}>
+              <Text style={styles.timeSmall}>End</Text>
+              <Text style={styles.timeLarge}>5:00 PM</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* DURATION (HOURS + MINUTES) */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Duration</Text>
+
+          <View style={styles.timeRow}>
+            {/* HOURS */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 onPress: open hour picker modal
+            >
+              <Text style={styles.timeSmall}>Hours</Text>
+              <Text style={styles.timeLarge}>1 hr</Text>
+              {/* 👉 replace with selectedHours */}
+            </Pressable>
+
+            {/* MINUTES */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 onPress: open minute picker modal
+            >
+              <Text style={styles.timeSmall}>Minutes</Text>
+              <Text style={styles.timeLarge}>30 min</Text>
+              {/* 👉 replace with selectedMinutes */}
+            </Pressable>
+          </View>
         </View>
 
         {/* WEEKDAY SELECTOR */}
@@ -113,7 +144,7 @@ export default function EditHabit() {
               <Pressable
                 key={index}
                 style={styles.dayBubble}
-                // TODO: toggle weekday selection
+                // 👉 toggle day selection here
               >
                 <Text style={styles.dayText}>{d}</Text>
               </Pressable>
@@ -179,7 +210,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  /* TYPE SELECTION */
+  /* TYPE OPTIONS */
   typeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -190,6 +221,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: "#F7F7FF",
     padding: 14,
@@ -202,23 +234,54 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  /* TIME PICKER */
-  timePicker: {
-    backgroundColor: "#F7F7FF",
-    padding: 14,
-    borderRadius: 12,
+  /* TOGGLE */
+  toggleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
 
-  timeText: {
-    fontSize: 15,
-    color: "#333",
-    fontWeight: "500",
+  toggleText: {
+    fontSize: 14,
+    color: "#444",
+    flex: 1,
+    fontWeight: 600,
   },
 
-  /* WEEKDAY SELECTOR */
+  /* TIME */
+  timeRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  timeCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    alignItems: "center",
+    justifyContent: "center",
+
+    // shadow
+    elevation: 2,
+  },
+
+  timeSmall: {
+    fontSize: 12,
+    color: "#777",
+  },
+
+  timeLarge: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333",
+  },
+
+  /* WEEKDAYS */
   daysRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -239,7 +302,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  /* SAVE BUTTON */
+  /* FOOTER */
   footer: {
     marginTop: 28,
   },
@@ -251,8 +314,8 @@ const styles = StyleSheet.create({
   },
 
   saveBtnText: {
-    color: "#FFFFFF",
     textAlign: "center",
+    color: "#FFF",
     fontSize: 16,
     fontWeight: "700",
   },

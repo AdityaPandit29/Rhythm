@@ -42,6 +42,19 @@ export default function EditTask() {
           />
         </View>
 
+        {/* MONTHLY TASK TOGGLE */}
+        <View style={styles.section}>
+          <View style={styles.toggleRow}>
+            <Switch
+              value={false}
+              onValueChange={() => {}}
+              // TODO: handle toggle monthly state
+              thumbColor="#6C63FF"
+            />
+            <Text style={styles.toggleText}>Repeat every month</Text>
+          </View>
+        </View>
+
         {/* DEADLINE PICKER */}
         <View style={styles.section}>
           <Text style={styles.label}>Deadline</Text>
@@ -57,21 +70,6 @@ export default function EditTask() {
               color="#444"
             />
           </TouchableOpacity>
-        </View>
-
-        {/* MONTHLY TASK TOGGLE */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Monthly Task</Text>
-
-          <View style={styles.toggleRow}>
-            <Switch
-              value={false}
-              onValueChange={() => {}}
-              // TODO: handle toggle monthly state
-              thumbColor="#6C63FF"
-            />
-            <Text style={styles.toggleText}>Repeat every month</Text>
-          </View>
         </View>
 
         {/* PRIORITY SELECTOR */}

@@ -308,10 +308,6 @@ const styles = StyleSheet.create({
 
     // shadow
     elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
   },
 
   timeSmall: {

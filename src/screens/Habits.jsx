@@ -50,8 +50,8 @@ export default function Habits() {
           startTime="7:00 PM"
           endTime="8:00 PM"
           daysSelected={[true, true, true, true, true, true, true]}
-          currentStreak="1"
-          bestStreak="5"
+          currentStreak="1500"
+          bestStreak="1000"
         />
       </ScrollView>
     </SafeAreaView>
