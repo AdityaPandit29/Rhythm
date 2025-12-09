@@ -37,7 +37,8 @@ export default function Habits() {
           name="Reading"
           duration="25 min"
           isFlexible={false}
-          scheduleTime="7:00 PM - 8:00 PM"
+          startTime="7:00 PM"
+          endTime="8:00 PM"
           daysSelected={[true, false, true, false, true, false, false]}
           currentStreak="4"
           bestStreak="14"
@@ -46,7 +47,8 @@ export default function Habits() {
           name="Meditation"
           duration="15 min"
           isFlexible={true}
-          scheduleTime="7:00 PM - 8:00 PM"
+          startTime="7:00 PM"
+          endTime="8:00 PM"
           daysSelected={[true, true, true, true, true, true, true]}
           currentStreak="1"
           bestStreak="5"
@@ -99,51 +101,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#6C63FF",
-  },
-
-  /* HABIT CARD */
-  habitCard: {
-    width: "100%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 18,
-
-    // Shadow
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-
-  habitName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-
-  habitType: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#6F6F6F",
-  },
-
-  habitDuration: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#444",
-  },
-
-  streakRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 14,
-  },
-
-  streakText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#555",
   },
 });

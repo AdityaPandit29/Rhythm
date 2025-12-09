@@ -3,16 +3,12 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 
-export default function HabitCard({
+export default function RoutineCard({
   id,
   name,
-  duration,
-  isFlexible,
   startTime,
   endTime,
   daysSelected,
-  currentStreak,
-  bestStreak,
   onEdit,
   onDelete,
 }) {
@@ -24,7 +20,7 @@ export default function HabitCard({
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditHabit")}
+          onPress={() => navigation.navigate("EditRoutine", { mode: "edit" })}
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
@@ -37,16 +33,10 @@ export default function HabitCard({
       {/* TITLE */}
       <Text style={styles.title}>{name}</Text>
 
-      {/* FLEXIBLE / FIXED + TIME */}
+      {/* SCHEDULED TIME */}
       <Text style={styles.subText}>
-        {isFlexible ? "Flexible" : "Fixed Time"} • {startTime} - {endTime}
+        {startTime} - {endTime}
       </Text>
-
-      {/* DURATION */}
-      <View style={styles.durationRow}>
-        <Entypo name="stopwatch" size={16} color="#555" />
-        <Text style={styles.durationText}>Duration: {duration}</Text>
-      </View>
 
       {/* WEEKDAY */}
       <View style={styles.daysRow}>
@@ -68,28 +58,6 @@ export default function HabitCard({
             </Text>
           </View>
         ))}
-      </View>
-      {/* STREAKS */}
-      <View style={styles.streakRow}>
-        <View style={styles.streakBox}>
-          <MaterialCommunityIcons
-            name="fire"
-            size={20}
-            color="#FF6B35"
-            style={{ marginRight: 6 }}
-          />
-          <Text style={styles.streakText}>Current: {currentStreak} days</Text>
-        </View>
-
-        <View style={styles.streakBox}>
-          <MaterialCommunityIcons
-            name="trophy"
-            size={20}
-            color="#F7B801"
-            style={{ marginRight: 6 }}
-          />
-          <Text style={styles.streakText}>Best: {bestStreak} days</Text>
-        </View>
       </View>
     </View>
   );
@@ -144,19 +112,6 @@ const styles = StyleSheet.create({
     color: "#777",
   },
 
-  durationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-    gap: 6,
-  },
-
-  durationText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#444",
-  },
-
   daysRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -179,28 +134,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#fff",
-  },
-
-  streakRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 16,
-    gap: 20,
-  },
-
-  streakBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F7F7F8",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-
-  streakText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
   },
 });

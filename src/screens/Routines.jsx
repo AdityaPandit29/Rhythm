@@ -5,86 +5,46 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Pressable,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
+import RoutineCard from "../components/RoutineCard";
 
 export default function Routines() {
   const navigation = useNavigation();
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={{ alignItems: "center", paddingBottom: 40 }}
-      >
-        {/* -------- HEADER -------- */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Routines</Text>
-        </View>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Routines</Text>
+      </View>
 
-        {/* -------- ADD ROUTINE BUTTON -------- */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ADD ROUTINE BUTTON */}
         <TouchableOpacity
           style={styles.addRoutineBtn}
-          onPress={() => navigation.navigate("EditRoutine", { mode: "add" })}
+          onPress={() => navigation.navigate("EditRoutine")}
         >
           <MaterialCommunityIcons name="plus" size={20} color="#6C63FF" />
-          <Text style={styles.addRoutineText}>Add Busy Time Block</Text>
+          <Text style={styles.addRoutineText}>Add Routine</Text>
         </TouchableOpacity>
 
-        {/* -------- ROUTINE CARD 1 -------- */}
-        <View style={styles.routineCard}>
-          <Text style={styles.routineTitle}>Office / Class</Text>
-          <Text style={styles.timeText}>9:00 AM – 5:00 PM</Text>
-
-          <View style={styles.daysRow}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri"].map((day) => (
-              <View key={day} style={styles.dayChip}>
-                <Text style={styles.dayText}>{day}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("EditRoutine", { mode: "edit" })
-              }
-            >
-              <Text style={styles.editText}>Edit</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity>
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* -------- ROUTINE CARD 2 -------- */}
-        <View style={styles.routineCard}>
-          <Text style={styles.routineTitle}>Gym</Text>
-          <Text style={styles.timeText}>6:30 PM – 7:30 PM</Text>
-
-          <View style={styles.daysRow}>
-            {["Mon", "Wed", "Fri"].map((day) => (
-              <View key={day} style={styles.dayChip}>
-                <Text style={styles.dayText}>{day}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("EditRoutine", { mode: "add" })
-              }
-            >
-              <Text style={styles.editText}>Edit</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity>
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <RoutineCard
+          name="Office"
+          startTime="8:00 AM"
+          endTime="5:00 PM"
+          daysSelected={[true, true, true, true, true, false, false]}
+        />
+        <RoutineCard
+          name="Gym"
+          startTime="6:00 PM"
+          endTime="7:00 PM"
+          daysSelected={[false, false, false, false, false, true, true]}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -99,11 +59,9 @@ const styles = StyleSheet.create({
   /* HEADER */
   header: {
     height: 60,
-    width: "100%",
     justifyContent: "center",
     alignItems: "center",
-    position: "relative",
-    marginBottom: 10,
+    backgroundColor: "#FFFFFF",
   },
 
   headerTitle: {
@@ -112,94 +70,28 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  headerIcon: {
-    position: "absolute",
-    right: 16,
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
 
-  /* ADD ROUTINE BUTTON */
+  /* ADD Routine BUTTON */
   addRoutineBtn: {
-    width: "85%",
-    borderWidth: 1.5,
-    borderColor: "#6C63FF",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.3,
+    borderColor: "#6C63FF",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 20,
   },
 
   addRoutineText: {
     fontSize: 15,
     fontWeight: "600",
     color: "#6C63FF",
-  },
-
-  /* ROUTINE CARD */
-  routineCard: {
-    width: "90%",
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    borderRadius: 20,
-    marginTop: 20,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-
-  routineTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-
-  timeText: {
-    fontSize: 14,
-    color: "#555",
-    fontWeight: "500",
-    marginTop: 6,
-  },
-
-  daysRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-  },
-
-  dayChip: {
-    backgroundColor: "#ECE9FF",
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-
-  dayText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6C63FF",
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 20,
-    marginTop: 14,
-  },
-
-  editText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6C63FF",
-  },
-
-  deleteText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#D9534F",
   },
 });

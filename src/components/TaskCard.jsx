@@ -11,7 +11,8 @@ export default function TaskCard({
   priority,
   duration,
   isAutomatic,
-  scheduleTime, // e.g., "3:00 PM – 3:45 PM"
+  startTime,
+  endTime,
   onReschedule,
   onDone,
 }) {
@@ -47,15 +48,15 @@ export default function TaskCard({
         <Text style={styles.subText}>
           {isMonthly ? "Monthly Task" : `Due: ${due}`} • Priority: {priority}
         </Text>
-        <Text style={styles.subText}>Scheduled: {scheduleTime}</Text>
+        <Text style={styles.subText}>
+          Scheduled: {startTime} - {endTime}
+        </Text>
       </View>
       {/* DURATION */}
       <View style={styles.durationRow}>
         <Entypo name="stopwatch" size={16} color="#555" />
         <Text style={styles.durationText}>Duration: {duration}</Text>
       </View>
-      {/* SCHEDULED TIME */}
-      {/* <Text style={styles.taskSchedule}>Scheduled: {scheduleTime}</Text> */}
 
       {/* BUTTONS */}
       <View style={styles.btnRow}>
