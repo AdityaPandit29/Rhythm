@@ -46,12 +46,12 @@ export default function EditHabit() {
         </View>
 
         {/* TYPE SELECTOR */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.label}>Habit Type</Text>
 
-          <View style={styles.typeRow}>
-            {/* FIXED TYPE */}
-            <Pressable
+          <View style={styles.typeRow}> */}
+        {/* FIXED TYPE */}
+        {/* <Pressable
               style={[styles.typeOption]}
               // 👉 Add onPress=setType("fixed")
             >
@@ -61,10 +61,10 @@ export default function EditHabit() {
                 color="#6C63FF"
               />
               <Text style={styles.typeText}>Fixed Time</Text>
-            </Pressable>
+            </Pressable> */}
 
-            {/* FLEXIBLE TYPE */}
-            <Pressable
+        {/* FLEXIBLE TYPE */}
+        {/* <Pressable
               style={[styles.typeOption]}
               // 👉 Add onPress=setType("flexible")
             >
@@ -76,38 +76,7 @@ export default function EditHabit() {
               <Text style={styles.typeText}>Flexible</Text>
             </Pressable>
           </View>
-        </View>
-
-        {/* TOGGLE: LET RHYTHM DECIDE */}
-        <View style={styles.section}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleText}>
-              Auto-schedule the best time for this habit
-            </Text>
-
-            <Switch
-              // 👉 Add logic: value={autoSchedule} onValueChange={setAutoSchedule}
-              trackColor={{ false: "#ccc", true: "#6C63FF" }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
-
-        {/* TIME - only show when type === fixed AND autoSchedule === false. only show start time if type === flexible AND autoSchedule === false */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Time</Text>
-          <View style={styles.timeRow}>
-            <TouchableOpacity style={styles.timeCard}>
-              <Text style={styles.timeSmall}>Start</Text>
-              <Text style={styles.timeLarge}>9:00 AM</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.timeCard}>
-              <Text style={styles.timeSmall}>End</Text>
-              <Text style={styles.timeLarge}>5:00 PM</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        </View> */}
 
         {/* DURATION (HOURS + MINUTES) */}
         <View style={styles.section}>
@@ -149,6 +118,37 @@ export default function EditHabit() {
                 <Text style={styles.dayText}>{d}</Text>
               </Pressable>
             ))}
+          </View>
+        </View>
+
+        {/* TOGGLE: LET RHYTHM DECIDE */}
+        <View style={styles.section}>
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleText}>
+              Auto-schedule the best time for this habit
+            </Text>
+
+            <Switch
+              // 👉 Add logic: value={autoSchedule} onValueChange={setAutoSchedule}
+              trackColor={{ false: "#ccc", true: "#6C63FF" }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* TIME */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Time</Text>
+          <View style={styles.timeRow}>
+            <TouchableOpacity style={styles.timeCard}>
+              <Text style={styles.timeSmall}>Start</Text>
+              <Text style={styles.timeLarge}>9:00 AM</Text>
+            </TouchableOpacity>
+
+            {/* <TouchableOpacity style={styles.timeCard}>
+              <Text style={styles.timeSmall}>End</Text>
+              <Text style={styles.timeLarge}>5:00 PM</Text>
+            </TouchableOpacity> */}
           </View>
         </View>
 

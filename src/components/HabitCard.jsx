@@ -7,10 +7,8 @@ export default function HabitCard({
   id,
   name,
   duration,
-  isFlexible,
   isAutomatic,
-  startTime,
-  endTime,
+  scheduledTime,
   daysSelected,
   currentStreak,
   bestStreak,
@@ -38,11 +36,9 @@ export default function HabitCard({
       {/* TITLE */}
       <Text style={styles.title}>{name}</Text>
 
-      {/* FLEXIBLE / FIXED + TIME */}
-      <Text style={styles.subText}>
-        {isFlexible
-          ? `Flexible • ${startTime}`
-          : `Fixed Duration • ${startTime} - ${endTime}`}
+      {/* TIME */}
+      <Text style={styles.schedule}>
+        Scheduled : {scheduledTime?.start} - {scheduledTime?.end}
       </Text>
 
       {/* DURATION */}
@@ -155,10 +151,16 @@ const styles = StyleSheet.create({
     color: "#777",
   },
 
+  schedule: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#444",
+    marginTop: 6,
+  },
+
   durationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
     gap: 6,
   },
 

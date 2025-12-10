@@ -38,8 +38,7 @@ export default function Habits() {
           duration="25 min"
           isFlexible={false}
           isAutomatic={true}
-          startTime="7:00 PM"
-          endTime="8:00 PM"
+          scheduledTime={{ start: "7:00 PM", end: "8:00 PM" }}
           daysSelected={[true, false, true, false, true, false, false]}
           currentStreak="4"
           bestStreak="14"
@@ -48,8 +47,7 @@ export default function Habits() {
           name="Meditation"
           duration="15 min"
           isFlexible={true}
-          startTime="7:00 PM"
-          endTime="8:00 PM"
+          scheduledTime={{ start: "7:00 PM", end: "8:00 PM" }}
           daysSelected={[true, true, true, true, true, true, true]}
           currentStreak="1500"
           bestStreak="1000"
