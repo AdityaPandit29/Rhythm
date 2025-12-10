@@ -6,13 +6,13 @@ import { useNavigation } from "@react-navigation/native";
 export default function TaskCard({
   id,
   name,
-  due,
   isMonthly,
-  priority,
-  duration,
-  isAutomatic,
-  startTime,
-  endTime,
+  deadline, // 👉 { date: "...", time: "..." }
+  priority, // High | Medium | Low
+  isAutomatic, // auto-schedule ON/OFF
+  duration, // "1 hr 20 min" OR "0"
+  scheduledTime, // 👉 { start: "9:00 AM", end: "10:30 AM" }
+  recommendedTime, // 👉 "4:30 PM" (only when duration=0)
   onReschedule,
   onDone,
 }) {
@@ -26,16 +26,19 @@ export default function TaskCard({
 
   return (
     <View style={styles.taskCard}>
-      {/* TOP RIGHT ICONS */}
+      {/* RIGHT TOP ICONS */}
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditTask")}
+          onPress={() => navigation.navigate("EditTask", { id })}
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          // 👉 onPress: delete task logic
+        >
           <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
       </View>
@@ -43,20 +46,45 @@ export default function TaskCard({
       {/* TITLE */}
       <Text style={styles.title}>{name}</Text>
 
-      {/* META INFO */}
-      <View>
-        <Text style={styles.subText}>
-          {isMonthly ? "Monthly Task" : `Due: ${due}`} • Priority: {priority}
-        </Text>
-        <Text style={styles.subText}>
-          Scheduled: {startTime} - {endTime}
-        </Text>
+      {/* META ROW: PRIORITY + TYPE */}
+      <View style={styles.metaRow}>
+        <View style={styles.priorityRow}>
+          <View
+            style={[
+              styles.priorityDot,
+              { backgroundColor: priorityColors[priority] },
+            ]}
+          />
+          <Text style={styles.priorityText}>{priority} Priority</Text>
+        </View>
+
+        {isMonthly && <Text style={styles.monthlyBadge}>Monthly</Text>}
+        {isAutomatic && <Text style={styles.monthlyBadge}>Auto</Text>}
       </View>
-      {/* DURATION */}
-      <View style={styles.durationRow}>
-        <Entypo name="stopwatch" size={16} color="#555" />
-        <Text style={styles.durationText}>Duration: {duration}</Text>
-      </View>
+
+      {/* DEADLINE */}
+      <Text style={styles.subText}>
+        Due: {deadline?.date} at {deadline?.time}
+      </Text>
+
+      {/* SCHEDULE AND DURATION */}
+      {duration === "0" ? (
+        <>
+          <Text style={styles.schedule}>
+            Can be done at <Text style={styles.bold}>{recommendedTime}</Text>
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.schedule}>
+            Scheduled : {scheduledTime?.start} - {scheduledTime?.end}
+          </Text>
+          <View style={styles.durationRow}>
+            <Entypo name="stopwatch" size={16} color="#555" />
+            <Text style={styles.durationText}>Duration: {duration}</Text>
+          </View>
+        </>
+      )}
 
       {/* BUTTONS */}
       <View style={styles.btnRow}>
@@ -93,8 +121,8 @@ const styles = StyleSheet.create({
   },
 
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: 12,
     backgroundColor: "#F4F4F5",
     justifyContent: "center",
@@ -110,15 +138,62 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    gap: 6,
+    marginBottom: 4,
+  },
+
+  priorityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  priorityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 10,
+  },
+
+  priorityText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+  },
+
+  monthlyBadge: {
+    backgroundColor: "#F7F7FF",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    fontSize: 12,
+    color: "#444",
+    fontWeight: "600",
+  },
+
   subText: {
     fontSize: 13,
     color: "#777",
+    marginTop: 4,
+  },
+
+  schedule: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#444",
+    marginTop: 6,
+  },
+
+  bold: {
+    fontWeight: "700",
+    color: "#333",
   },
 
   durationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
     gap: 6,
   },
 
@@ -128,15 +203,11 @@ const styles = StyleSheet.create({
     color: "#444",
   },
 
-  taskSchedule: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#555",
-  },
-
   btnRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
   },
 
   rescheduleBtn: {

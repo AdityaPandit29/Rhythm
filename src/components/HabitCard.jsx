@@ -8,6 +8,7 @@ export default function HabitCard({
   name,
   duration,
   isFlexible,
+  isAutomatic,
   startTime,
   endTime,
   daysSelected,
@@ -39,7 +40,9 @@ export default function HabitCard({
 
       {/* FLEXIBLE / FIXED + TIME */}
       <Text style={styles.subText}>
-        {isFlexible ? "Flexible" : "Fixed Time"} • {startTime} - {endTime}
+        {isFlexible
+          ? `Flexible • ${startTime}`
+          : `Fixed Duration • ${startTime} - ${endTime}`}
       </Text>
 
       {/* DURATION */}
@@ -91,6 +94,14 @@ export default function HabitCard({
           <Text style={styles.streakText}>Best: {bestStreak} days</Text>
         </View>
       </View>
+      {/* BUTTONS */}
+      <View style={styles.btnRow}>
+        {isAutomatic && (
+          <TouchableOpacity style={styles.rescheduleBtn}>
+            <Text style={styles.rescheduleText}>Reschedule</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -122,8 +133,8 @@ const styles = StyleSheet.create({
   },
 
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: 12,
     backgroundColor: "#F4F4F5",
     justifyContent: "center",
@@ -202,5 +213,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#333",
+  },
+
+  btnRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 16,
+  },
+
+  rescheduleBtn: {
+    borderWidth: 1.2,
+    borderColor: "#6C63FF",
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+
+  rescheduleText: {
+    color: "#6C63FF",
+    fontWeight: "600",
+    fontSize: 13,
   },
 });

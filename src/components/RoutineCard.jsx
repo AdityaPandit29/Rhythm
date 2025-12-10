@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
   },
 
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: 12,
     backgroundColor: "#F4F4F5",
     justifyContent: "center",

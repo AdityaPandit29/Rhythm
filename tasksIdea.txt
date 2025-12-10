@@ -1,0 +1,126 @@
+✅ Final Recommended Design for Tasks (Based on Your Idea)
+1️⃣ Task Name
+
+Simple and required.
+
+2️⃣ Monthly Task (Optional)
+
+A toggle or dropdown:
+
+If ON → repeats every month on the chosen date
+
+If OFF → normal single task
+
+Keep this optional for now (good decision).
+
+3️⃣ Deadline (Date + Time)
+
+This is extremely important because:
+
+Auto-scheduler needs a boundary
+
+Priority decisions depend on it
+
+Helps prevent overdue tasks
+
+✔ Keep deadline mandatory if autoschedule is ON
+✔ Optional if autoschedule is OFF
+
+4️⃣ Priority (Low, Medium, High)
+
+This priority feeds into the scheduler:
+
+High Priority
+
+Can override habits
+
+Can override low/medium tasks
+
+Gets earliest available free block
+
+If “urgent,” it may cut into flexible habits
+
+Medium Priority
+
+Schedules around habits
+
+But can push low-priority tasks
+
+Low Priority
+
+Gets leftover time
+
+Never overrides habits
+
+Scheduled only when space available
+
+This is perfect. Keep it.
+
+5️⃣ Auto-Schedule Toggle
+
+This is the MOST important piece. Your logic is very good.
+
+🔵 If Auto-Schedule = ON
+
+User enters:
+
+✔ Approx Duration
+
+e.g., 20, 45, 120 minutes
+
+If duration = 0 →
+Meaning: "No timer needed. Just place this task somewhere free."
+
+UI can show:
+
+“Rhythm will place this task in a free time block.”
+
+✔ No need to select time
+
+You will compute best time based on:
+
+Free spaces between habits
+
+Priority
+
+Deadline
+
+User's preferred productive hours (optional future feature)
+
+🔴 If Auto-Schedule = OFF
+
+User manually sets:
+
+Start Time
+
+End Time
+
+And this overrides scheduling logic but still respects:
+
+No overlap
+
+No conflict with fixed habits
+
+Optional: Warn if it clashes with flexible auto habits
+
+🧠 Why your idea is excellent
+
+Because it creates a unified logic:
+
+Habits = repeated routines
+
+Have “auto-schedule” toggle
+
+Tasks = single items with a deadline
+
+Also have “auto-schedule” toggle
+
+But with priority rules
+
+The biggest difference:
+
+Habits care about consistency and time of day
+
+Tasks care about deadline and priority
+
+And your design respects that.

@@ -37,13 +37,12 @@ export default function Tasks() {
         <TaskCard
           id={1}
           name="Complete Assignment"
-          due="Today 5:00 pm"
+          deadline={{ date: "Today", time: "5:00 PM" }}
           isMonthly={false}
           duration="45 min"
           priority="High"
-          isAutomatic={true}
-          startTime="3:00 PM"
-          endTime="3:45 PM"
+          isAutomatic={false}
+          scheduledTime={{ start: "3:00 PM", end: "3:45 PM" }}
           onReschedule={() => console.log("Reschedule")}
           onDone={() => console.log("Done!")}
         />
@@ -51,13 +50,12 @@ export default function Tasks() {
         <TaskCard
           id={2}
           name="Monthly Fee Payment"
-          due="Tomorrow 6:00 pm"
+          deadline={{ date: "29th Dec", time: "5:00 PM" }}
           isMonthly={true}
-          duration="45 min"
+          duration="0"
           priority="Low"
-          isAutomatic={false}
-          startTime="6:00 PM"
-          endTime="7:00 PM"
+          isAutomatic={true}
+          scheduledTime={{ start: "6:00 PM", end: "7:00 PM" }}
           onReschedule={() => console.log("Reschedule")}
           onDone={() => console.log("Done!")}
         />

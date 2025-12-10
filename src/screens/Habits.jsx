@@ -37,6 +37,7 @@ export default function Habits() {
           name="Reading"
           duration="25 min"
           isFlexible={false}
+          isAutomatic={true}
           startTime="7:00 PM"
           endTime="8:00 PM"
           daysSelected={[true, false, true, false, true, false, false]}

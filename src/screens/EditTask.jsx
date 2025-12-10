@@ -15,7 +15,10 @@ import { useNavigation } from "@react-navigation/native";
 export default function EditTask() {
   const navigation = useNavigation();
 
+  // 👉 ADD YOUR STATES HERE (taskName, isMonthly, deadline, priority, autoSchedule, duration, times, etc.)
+
   const validateAndSave = () => {
+    // 👉 VALIDATE & SAVE LOGIC HERE
     navigation.goBack();
   };
 
@@ -38,167 +41,161 @@ export default function EditTask() {
             style={styles.input}
             placeholder="Enter task name"
             placeholderTextColor="#999"
-            // TODO: Add onChangeText to update task name
+            // 👉 onChangeText=...
           />
         </View>
 
-        {/* MONTHLY TASK TOGGLE */}
+        {/* MONTHLY TOGGLE */}
         <View style={styles.section}>
           <View style={styles.toggleRow}>
+            <Text style={styles.toggleText}>Repeat Monthly</Text>
             <Switch
-              value={false}
-              onValueChange={() => {}}
-              // TODO: handle toggle monthly state
-              thumbColor="#6C63FF"
+              // 👉 value={isMonthly} onValueChange={setIsMonthly}
+              trackColor={{ false: "#ccc", true: "#6C63FF" }}
+              thumbColor="#fff"
             />
-            <Text style={styles.toggleText}>Repeat every month</Text>
           </View>
         </View>
 
-        {/* DEADLINE PICKER */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Deadline</Text>
-
-          <TouchableOpacity
-            style={styles.timePicker}
-            // TODO: open date + time picker using expo-datetime-picker
-          >
-            <Text style={styles.timeText}>Today • 5:00 PM</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={22}
-              color="#444"
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* PRIORITY SELECTOR */}
+        {/* PRIORITY */}
         <View style={styles.section}>
           <Text style={styles.label}>Priority</Text>
 
-          <View style={styles.priorityRow}>
-            {/* HIGH */}
+          <View style={styles.typeRow}>
+            {/* LOW */}
             <Pressable
-              style={styles.priorityOption}
-              // TODO: set priority = high
+              style={[styles.typeOption]}
+              // 👉 onPress={() => setPriority("low")}
             >
               <MaterialCommunityIcons
-                name="arrow-up-bold"
+                name="arrow-down"
                 size={20}
-                color="#FF4D4D"
+                color="#6C63FF"
               />
-              <Text style={styles.priorityText}>High</Text>
+              <Text style={styles.typeText}>Low</Text>
             </Pressable>
 
             {/* MEDIUM */}
             <Pressable
-              style={styles.priorityOption}
-              // TODO: set priority = medium
+              style={[styles.typeOption]}
+              // 👉 onPress={() => setPriority("medium")}
             >
-              <MaterialCommunityIcons
-                name="arrow-right-bold"
-                size={20}
-                color="#FFA500"
-              />
-              <Text style={styles.priorityText}>Medium</Text>
+              <MaterialCommunityIcons name="minus" size={20} color="#6C63FF" />
+              <Text style={styles.typeText}>Medium</Text>
             </Pressable>
 
-            {/* LOW */}
+            {/* HIGH */}
             <Pressable
-              style={styles.priorityOption}
-              // TODO: set priority = low
+              style={[styles.typeOption]}
+              // 👉 onPress={() => setPriority("high")}
             >
               <MaterialCommunityIcons
-                name="arrow-down-bold"
-                size={20}
-                color="#4CAF50"
-              />
-              <Text style={styles.priorityText}>Low</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* TIME MODE SELECTOR */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Schedule Mode</Text>
-
-          <View style={styles.modeRow}>
-            {/* MANUAL MODE */}
-            <Pressable
-              style={styles.modeOption}
-              // TODO: set state: setMode("manual")
-            >
-              <MaterialCommunityIcons
-                name="clock-edit-outline"
+                name="arrow-up"
                 size={20}
                 color="#6C63FF"
               />
-              <Text style={styles.modeText}>Manual Time</Text>
-            </Pressable>
-
-            {/* AUTOMATIC MODE */}
-            <Pressable
-              style={styles.modeOption}
-              // TODO: set state: setMode("auto")
-            >
-              <MaterialCommunityIcons name="brain" size={20} color="#6C63FF" />
-              <Text style={styles.modeText}>Automatic</Text>
+              <Text style={styles.typeText}>High</Text>
             </Pressable>
           </View>
         </View>
 
-        {/* MANUAL TIME PICKERS */}
-        {/* TODO: Render this only if mode === "manual" */}
+        {/* AUTO-SCHEDULE TOGGLE */}
         <View style={styles.section}>
-          <Text style={styles.label}>Select Time</Text>
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleText}>
+              Auto-schedule the best time for this task
+            </Text>
+            <Switch
+              // 👉 value={autoSchedule} onValueChange={setAutoSchedule}
+              trackColor={{ false: "#ccc", true: "#6C63FF" }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* DEADLINE */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Deadline</Text>
+          <View style={styles.timeRow}>
+            {/* DATE PICKER */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 onPress: open date picker
+            >
+              <Text style={styles.timeSmall}>Date</Text>
+              <Text style={styles.timeLarge}>Dec 20</Text>
+              {/* 👉 replace with selected date */}
+            </Pressable>
+
+            {/* TIME PICKER */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 onPress: open time picker
+            >
+              <Text style={styles.timeSmall}>Time</Text>
+              <Text style={styles.timeLarge}>5:00 PM</Text>
+              {/* 👉 replace with selected time */}
+            </Pressable>
+          </View>
+        </View>
+
+        {/* IF AUTO-SCHEDULE ON → SHOW DURATION INPUTS */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Duration</Text>
 
           <View style={styles.timeRow}>
-            <TouchableOpacity
-              style={styles.timeBlock}
-              // TODO: open start time picker
+            {/* HOURS */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 open hour picker
             >
-              <Text style={styles.timeText}>Start Time</Text>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={20}
-                color="#444"
-              />
-            </TouchableOpacity>
+              <Text style={styles.timeSmall}>Hours</Text>
+              <Text style={styles.timeLarge}>1 hr</Text>
+            </Pressable>
 
-            <TouchableOpacity
-              style={styles.timeBlock}
-              // TODO: open end time picker
+            {/* MINUTES */}
+            <Pressable
+              style={styles.timeCard}
+              // 👉 open minute picker
             >
-              <Text style={styles.timeText}>End Time</Text>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={20}
-                color="#444"
-              />
-            </TouchableOpacity>
+              <Text style={styles.timeSmall}>Minutes</Text>
+              <Text style={styles.timeLarge}>30 min</Text>
+            </Pressable>
           </View>
+
+          {/* INFO IF DURATION = 0 */}
+          {/* 👉 Show conditionally if duration = 0 */}
+          {/* <Text style={{ marginTop: 8, color: "#777", fontSize: 12 }}>
+            Rhythm will place this task in any free time.
+          </Text> */}
         </View>
 
-        {/* AUTOMATIC MODE DURATION INPUT */}
-        {/* TODO: Render this only if mode === "auto" */}
+        {/* MANUAL TIME SELECTOR (ONLY IF AUTO-SCHEDULE OFF) */}
         <View style={styles.section}>
-          <Text style={styles.label}>Duration (minutes)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 45"
-            placeholderTextColor="#999"
-            keyboardType="numeric"
-            // TODO: setDuration
-          />
+          <Text style={styles.label}>Time</Text>
+
+          <View style={styles.timeRow}>
+            <Pressable
+              style={styles.timeCard}
+              // 👉 open start time picker
+            >
+              <Text style={styles.timeSmall}>Start</Text>
+              <Text style={styles.timeLarge}>2:00 PM</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.timeCard}
+              // 👉 open end time picker
+            >
+              <Text style={styles.timeSmall}>End</Text>
+              <Text style={styles.timeLarge}>3:00 PM</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* SAVE BUTTON */}
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={validateAndSave}
-            // TODO: Add onPress to save task and navigate back
-          >
+          <TouchableOpacity style={styles.saveBtn} onPress={validateAndSave}>
             <Text style={styles.saveBtnText}>Save Task</Text>
           </TouchableOpacity>
         </View>
@@ -206,6 +203,8 @@ export default function EditTask() {
     </SafeAreaView>
   );
 }
+
+/* -------------------------------- STYLES (Same as EditHabit) -------------------------------- */
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -252,97 +251,76 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  /* TIME PICKER */
-  timePicker: {
+  /* TYPE/PRIORITY OPTIONS */
+  typeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  typeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: "#F7F7FF",
     padding: 14,
     borderRadius: 12,
+  },
+
+  typeText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+
+  /* TOGGLE */
+  toggleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
 
-  timeText: {
-    fontSize: 15,
-    color: "#333",
-    fontWeight: "500",
-  },
-
-  /* MONTHLY TOGGLE */
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 4,
-  },
-
   toggleText: {
-    fontSize: 15,
-    color: "#333",
-  },
-
-  /* PRIORITY */
-  priorityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  priorityOption: {
+    fontSize: 14,
+    color: "#444",
     flex: 1,
-    backgroundColor: "#F7F7FF",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    fontWeight: 600,
   },
 
-  priorityText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-
-  /* TIME MODE SELECTOR */
-  modeRow: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-  },
-
-  modeOption: {
-    flex: 1,
-    backgroundColor: "#F7F7FF",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  modeText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-
+  /* TIME CARDS */
   timeRow: {
     flexDirection: "row",
     gap: 12,
   },
 
-  timeBlock: {
+  timeCard: {
     flex: 1,
-    backgroundColor: "#F7F7FF",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
     alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
   },
 
-  /* SAVE BUTTON */
+  timeSmall: {
+    fontSize: 12,
+    color: "#777",
+  },
+
+  timeLarge: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333",
+  },
+
+  /* FOOTER BUTTON */
   footer: {
     marginTop: 28,
   },
@@ -354,8 +332,8 @@ const styles = StyleSheet.create({
   },
 
   saveBtnText: {
-    color: "#FFFFFF",
     textAlign: "center",
+    color: "#FFF",
     fontSize: 16,
     fontWeight: "700",
   },
