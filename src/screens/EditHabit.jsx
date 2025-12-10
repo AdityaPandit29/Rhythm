@@ -8,19 +8,102 @@ import {
   Pressable,
   ScrollView,
   Switch,
+  Modal,
+  FlatList,
 } from "react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useState } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
+
+const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function EditHabit() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params || {};
 
-  // 👉 ADD YOUR STATES HERE (habitName, type, duration, selectedDays, etc.)
+  const mode = params.mode === "edit" ? "edit" : "add";
+  const existing = params.habit || {};
+
+  /* ------------------------- STATES ------------------------- */
+  const [habitName, setHabitName] = useState(existing.habitName ?? "");
+  const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
+
+  const [isAuto, setIsAuto] = useState(existing.isAuto ?? true);
+
+  const [selectedHours, setSelectedHours] = useState(
+    existing.selectedHours ?? 0
+  );
+  const [selectedMinutes, setSelectedMinutes] = useState(
+    existing.selectedMinutes ?? 0
+  );
+
+  const [startTime, setStartTime] = useState(
+    existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
+  );
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const [showHourModal, setShowHourModal] = useState(false);
+  const [showMinuteModal, setShowMinuteModal] = useState(false);
+
+  /* ------------------------- FUNCTIONS ------------------------- */
+
+  const toggleDay = (index) => {
+    const copy = [...days];
+    copy[index] = !copy[index];
+    setDays(copy);
+  };
+
+  const onChangeTime = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (selectedTime) setStartTime(selectedTime);
+  };
 
   const validateAndSave = () => {
-    // 👉 VALIDATION + SAVE LOGIC HERE
+    // TODO: VALIDATE USER INPUT
+    // TODO: SAVE HABIT INTO LOCAL DB OR SECURE STORE
+    // TODO: HANDLE AUTO-SCHEDULING
+
     navigation.goBack();
   };
+
+  /* ---------------------- RENDER HELPERS ----------------------- */
+
+  const renderPickerModal = (visible, setVisible, data, onSelect) => (
+    <Modal transparent visible={visible} animationType="slide">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select</Text>
+
+          <FlatList
+            data={data}
+            keyExtractor={(item) => item.toString()}
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalItem,
+                  pressed && { backgroundColor: "#F7F7FF" },
+                ]}
+                onPress={() => {
+                  onSelect(item);
+                  setVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </Pressable>
+            )}
+          />
+
+          <TouchableOpacity
+            style={styles.modalClose}
+            onPress={() => setVisible(false)}
+          >
+            <Text style={styles.modalCloseText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -30,8 +113,10 @@ export default function EditHabit() {
       >
         {/* HEADER */}
         <View style={styles.topText}>
-          <Text style={styles.title}>Edit Habit</Text>
-          <Text style={styles.subtitle}>Update your habit details.</Text>
+          <Text style={styles.title}>
+            {mode === "edit" ? "Edit Habit" : "Add Habit"}
+          </Text>
+          <Text style={styles.subtitle}>Set up your habit flow.</Text>
         </View>
 
         {/* HABIT NAME */}
@@ -41,67 +126,33 @@ export default function EditHabit() {
             style={styles.input}
             placeholder="Enter habit name"
             placeholderTextColor="#999"
-            // 👉 onChangeText here
+            value={habitName}
+            onChangeText={setHabitName}
           />
         </View>
 
-        {/* TYPE SELECTOR */}
-        {/* <View style={styles.section}>
-          <Text style={styles.label}>Habit Type</Text>
-
-          <View style={styles.typeRow}> */}
-        {/* FIXED TYPE */}
-        {/* <Pressable
-              style={[styles.typeOption]}
-              // 👉 Add onPress=setType("fixed")
-            >
-              <MaterialCommunityIcons
-                name="clock-time-four"
-                size={20}
-                color="#6C63FF"
-              />
-              <Text style={styles.typeText}>Fixed Time</Text>
-            </Pressable> */}
-
-        {/* FLEXIBLE TYPE */}
-        {/* <Pressable
-              style={[styles.typeOption]}
-              // 👉 Add onPress=setType("flexible")
-            >
-              <MaterialCommunityIcons
-                name="infinity"
-                size={20}
-                color="#6C63FF"
-              />
-              <Text style={styles.typeText}>Flexible</Text>
-            </Pressable>
-          </View>
-        </View> */}
-
-        {/* DURATION (HOURS + MINUTES) */}
+        {/* DURATION */}
         <View style={styles.section}>
           <Text style={styles.label}>Duration</Text>
 
           <View style={styles.timeRow}>
             {/* HOURS */}
-            <Pressable
+            <TouchableOpacity
               style={styles.timeCard}
-              // 👉 onPress: open hour picker modal
+              onPress={() => setShowHourModal(true)}
             >
               <Text style={styles.timeSmall}>Hours</Text>
-              <Text style={styles.timeLarge}>1 hr</Text>
-              {/* 👉 replace with selectedHours */}
-            </Pressable>
+              <Text style={styles.timeLarge}>{selectedHours} h</Text>
+            </TouchableOpacity>
 
             {/* MINUTES */}
-            <Pressable
+            <TouchableOpacity
               style={styles.timeCard}
-              // 👉 onPress: open minute picker modal
+              onPress={() => setShowMinuteModal(true)}
             >
               <Text style={styles.timeSmall}>Minutes</Text>
-              <Text style={styles.timeLarge}>30 min</Text>
-              {/* 👉 replace with selectedMinutes */}
-            </Pressable>
+              <Text style={styles.timeLarge}>{selectedMinutes} min</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -109,19 +160,26 @@ export default function EditHabit() {
         <View style={styles.section}>
           <Text style={styles.label}>Repeat On</Text>
           <View style={styles.daysRow}>
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, index) => (
+            {WEEK_DAYS.map((d, index) => (
               <Pressable
                 key={index}
-                style={styles.dayBubble}
-                // 👉 toggle day selection here
+                style={[
+                  styles.dayBubble,
+                  days[index] && { backgroundColor: "#6C63FF" },
+                ]}
+                onPress={() => toggleDay(index)}
               >
-                <Text style={styles.dayText}>{d}</Text>
+                <Text
+                  style={[styles.dayText, days[index] && { color: "#fff" }]}
+                >
+                  {d}
+                </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {/* TOGGLE: LET RHYTHM DECIDE */}
+        {/* AUTO-SCHEDULE */}
         <View style={styles.section}>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>
@@ -129,28 +187,43 @@ export default function EditHabit() {
             </Text>
 
             <Switch
-              // 👉 Add logic: value={autoSchedule} onValueChange={setAutoSchedule}
+              value={isAuto}
+              onValueChange={setIsAuto}
               trackColor={{ false: "#ccc", true: "#6C63FF" }}
               thumbColor="#fff"
             />
           </View>
         </View>
 
-        {/* TIME */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Time</Text>
-          <View style={styles.timeRow}>
-            <TouchableOpacity style={styles.timeCard}>
-              <Text style={styles.timeSmall}>Start</Text>
-              <Text style={styles.timeLarge}>9:00 AM</Text>
-            </TouchableOpacity>
-
-            {/* <TouchableOpacity style={styles.timeCard}>
-              <Text style={styles.timeSmall}>End</Text>
-              <Text style={styles.timeLarge}>5:00 PM</Text>
-            </TouchableOpacity> */}
+        {/* TIME PICKER */}
+        {!isAuto && (
+          <View style={styles.section}>
+            <Text style={styles.label}>Start Time</Text>
+            <View style={styles.timeRow}>
+              <TouchableOpacity
+                style={styles.timeCard}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={styles.timeLarge}>
+                  {startTime.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={startTime}
+            mode="time"
+            display="spinner"
+            onChange={onChangeTime}
+          />
+        )}
 
         {/* SAVE BUTTON */}
         <View style={styles.footer}>
@@ -159,49 +232,35 @@ export default function EditHabit() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* MODALS */}
+      {renderPickerModal(
+        showHourModal,
+        setShowHourModal,
+        [...Array(13).keys()], // 0–12 hours
+        setSelectedHours
+      )}
+
+      {renderPickerModal(
+        showMinuteModal,
+        setShowMinuteModal,
+        [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
+        setSelectedMinutes
+      )}
     </SafeAreaView>
   );
 }
 
-/* -------------------------------- STYLES -------------------------------- */
+/* ----------------------------- STYLES ----------------------------- */
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-
-  container: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  topText: {
-    marginBottom: 12,
-  },
-
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#333",
-  },
-
-  subtitle: {
-    marginTop: 6,
-    color: "#666",
-  },
-
-  section: {
-    marginTop: 18,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#444",
-    marginBottom: 8,
-  },
-
+  safeArea: { flex: 1, backgroundColor: "#FFF" },
+  container: { padding: 20 },
+  topText: { marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: "700", color: "#333" },
+  subtitle: { marginTop: 6, color: "#666" },
+  section: { marginTop: 18 },
+  label: { fontSize: 14, fontWeight: "600", color: "#444", marginBottom: 8 },
   input: {
     backgroundColor: "#F7F7FF",
     padding: 14,
@@ -209,54 +268,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
   },
-
-  /* TYPE OPTIONS */
-  typeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  typeOption: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#F7F7FF",
-    padding: 14,
-    borderRadius: 12,
-  },
-
-  typeText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#333",
-  },
-
-  /* TOGGLE */
   toggleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  toggleText: { fontSize: 14, color: "#444", flex: 1, fontWeight: "600" },
 
-  toggleText: {
-    fontSize: 14,
-    color: "#444",
-    flex: 1,
-    fontWeight: 600,
-  },
-
-  /* TIME */
-  timeRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-
+  timeRow: { flexDirection: "row", gap: 12 },
   timeCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFF",
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 12,
@@ -268,20 +290,9 @@ const styles = StyleSheet.create({
     // shadow
     elevation: 2,
   },
+  timeSmall: { fontSize: 12, color: "#777" },
+  timeLarge: { marginTop: 6, fontSize: 18, fontWeight: "700", color: "#333" },
 
-  timeSmall: {
-    fontSize: 12,
-    color: "#777",
-  },
-
-  timeLarge: {
-    marginTop: 6,
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-
-  /* WEEKDAYS */
   daysRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -296,17 +307,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  dayText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
+  dayText: { fontSize: 14, fontWeight: "600", color: "#333" },
 
-  /* FOOTER */
-  footer: {
-    marginTop: 28,
-  },
-
+  footer: { marginTop: 28 },
   saveBtn: {
     backgroundColor: "#6C63FF",
     paddingVertical: 16,
@@ -318,5 +321,48 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     fontWeight: "700",
+  },
+
+  /* MODAL */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+
+  modalContent: {
+    backgroundColor: "#FFF",
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "50%",
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+
+  modalItem: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+
+  modalItemText: { fontSize: 18, color: "#333" },
+
+  modalClose: {
+    marginTop: 10,
+    backgroundColor: "#EEE",
+    padding: 12,
+    borderRadius: 12,
+  },
+
+  modalCloseText: {
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

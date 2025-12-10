@@ -151,12 +151,12 @@ export default function EditRoutine() {
     }
   };
 
-  useEffect(() => {
-    navigation.setOptions({
-      title: mode === "edit" ? "Edit Routine" : "Add Routine",
-      headerTitleAlign: "center",
-    });
-  }, [navigation, mode]);
+  // useEffect(() => {
+  //   navigation.setOptions({
+  //     title: mode === "edit" ? "Edit Routine" : "Add Routine",
+  //     headerTitleAlign: "center",
+  //   });
+  // }, [navigation, mode]);
 
   return (
     <SafeAreaView style={styles.safeArea}>

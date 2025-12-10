@@ -23,7 +23,7 @@ export default function HabitCard({
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditHabit")}
+          onPress={() => navigation.navigate("EditHabit", { mode: "edit" })}
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
