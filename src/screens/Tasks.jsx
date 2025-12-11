@@ -28,7 +28,7 @@ export default function Tasks() {
         {/* ADD TASK BUTTON */}
         <TouchableOpacity
           style={styles.addTaskBtn}
-          onPress={() => navigation.navigate("EditTask")}
+          onPress={() => navigation.navigate("EditTask", { mode: "add" })}
         >
           <MaterialCommunityIcons name="plus" size={20} color="#6C63FF" />
           <Text style={styles.addTaskText}>Add Task</Text>
@@ -41,7 +41,7 @@ export default function Tasks() {
           isMonthly={false}
           duration="45 min"
           priority="High"
-          isAutomatic={false}
+          isAuto={false}
           scheduledTime={{ start: "3:00 PM", end: "3:45 PM" }}
           onReschedule={() => console.log("Reschedule")}
           onDone={() => console.log("Done!")}
@@ -54,7 +54,7 @@ export default function Tasks() {
           isMonthly={true}
           duration="0"
           priority="Low"
-          isAutomatic={true}
+          isAuto={true}
           scheduledTime={{ start: "6:00 PM", end: "7:00 PM" }}
           onReschedule={() => console.log("Reschedule")}
           onDone={() => console.log("Done!")}

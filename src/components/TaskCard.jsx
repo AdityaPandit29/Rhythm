@@ -9,7 +9,7 @@ export default function TaskCard({
   isMonthly,
   deadline, // 👉 { date: "...", time: "..." }
   priority, // High | Medium | Low
-  isAutomatic, // auto-schedule ON/OFF
+  isAuto, // auto-schedule ON/OFF
   duration, // "1 hr 20 min" OR "0"
   scheduledTime, // 👉 { start: "9:00 AM", end: "10:30 AM" }
   recommendedTime, // 👉 "4:30 PM" (only when duration=0)
@@ -30,7 +30,19 @@ export default function TaskCard({
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditTask", { id })}
+          onPress={() =>
+            navigation.navigate("EditTask", {
+              mode: "edit",
+              task: {
+                taskName: name,
+                isMonthly: isMonthly,
+                priority: priority,
+                isAuto: isAuto,
+                // startTime: scheduledTime.start,
+                // endTime: scheduledTime.end,
+              },
+            })
+          }
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
@@ -59,13 +71,15 @@ export default function TaskCard({
         </View>
 
         {isMonthly && <Text style={styles.monthlyBadge}>Monthly</Text>}
-        {isAutomatic && <Text style={styles.monthlyBadge}>Auto</Text>}
+        {isAuto && <Text style={styles.monthlyBadge}>Auto</Text>}
       </View>
 
-      {/* DEADLINE */}
-      <Text style={styles.subText}>
-        Due: {deadline?.date} at {deadline?.time}
-      </Text>
+      {/* DEADLINE if isAuto === true */}
+      {isAuto && (
+        <Text style={styles.subText}>
+          Due: {deadline?.date} at {deadline?.time}
+        </Text>
+      )}
 
       {/* SCHEDULE AND DURATION */}
       {duration === "0" ? (
@@ -88,7 +102,7 @@ export default function TaskCard({
 
       {/* BUTTONS */}
       <View style={styles.btnRow}>
-        {isAutomatic && (
+        {isAuto && (
           <TouchableOpacity style={styles.rescheduleBtn} onPress={onReschedule}>
             <Text style={styles.rescheduleText}>Reschedule</Text>
           </TouchableOpacity>
