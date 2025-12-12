@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useSQLiteContext } from "expo-sqlite";
 
 /**
  * Routine Editor screen (Add / Edit)
@@ -33,6 +34,8 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
 
 export default function EditRoutine() {
+  const db = useSQLiteContext();
+
   const navigation = useNavigation();
   const route = useRoute();
   const params = route.params || {};
@@ -49,7 +52,7 @@ export default function EditRoutine() {
     existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
   );
   const [endTime, setEndTime] = useState(
-    existing.endTime ?? new Date(new Date().setHours(5, 0, 0, 0))
+    existing.endTime ?? new Date(new Date().setHours(17, 0, 0, 0))
   );
   const [activePicker, setActivePicker] = useState(null); // "start" or "end"
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -73,74 +76,141 @@ export default function EditRoutine() {
     }
   };
 
-  const validateAndSave = () => {
-    // Basic validation: at least one day selected
-    // if (!days.some(Boolean)) {
-    //   Alert.alert(
-    //     "Select days",
-    //     "Please select at least one day for this routine."
-    //   );
-    //   return;
-    // }
+  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
+    const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
 
-    // // Basic time validation (rudimentary because we store strings).
-    // // For robust checks, convert times to minutes since midnight.
-    // const parseTimeToMinutes = (t) => {
-    //   // Example input: "7:30 PM" or "07:30 AM" or "19:00"
-    //   const d = new Date("1970-01-01 " + (t.includes("M") ? t : t));
-    //   if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
-    //   // fallback: try manual parse
-    //   const parts = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    //   if (!parts) return null;
-    //   let hh = parseInt(parts[1], 10);
-    //   const mm = parseInt(parts[2], 10);
-    //   const ampm = parts[3];
-    //   if (ampm) {
-    //     if (ampm.toUpperCase() === "PM" && hh !== 12) hh += 12;
-    //     if (ampm.toUpperCase() === "AM" && hh === 12) hh = 0;
-    //   }
-    //   return hh * 60 + mm;
-    // };
+    const aCross = aStart > aEnd; // crosses midnight
+    const bCross = bStart > bEnd; // crosses midnight
 
-    // const s = parseTimeToMinutes(startTime);
-    // const e = parseTimeToMinutes(endTime);
-    // if (s === null || e === null) {
-    //   Alert.alert("Invalid time", "Please set valid start and end times.");
-    //   return;
-    // }
-    // if (s >= e) {
-    //   Alert.alert("Time error", "Start time must be earlier than end time.");
-    //   return;
-    // }
+    if (!aCross && !bCross) {
+      return check(aStart, aEnd, bStart, bEnd);
+    }
 
-    // const routine = {
-    //   id: existing.id ?? Date.now().toString(),
-    //   label: label.trim(),
-    //   startTime,
-    //   endTime,
-    //   days,
-    //   createdAt: existing.createdAt ?? new Date().toISOString(),
-    // };
+    if (aCross && bCross) {
+      return true; // both span midnight → guaranteed overlap
+    }
 
-    // Return new/updated routine to previous screen (or replace with API call)
-    // You might want to call an API / save to AsyncStorage / dispatch redux action here.
-    navigation.goBack(); // go back first
-    // Optionally pass data back:
-    // if (route.params?.onSave && typeof route.params.onSave === "function") {
-    //   route.params.onSave(routine);
-    // } else {
-    //   // If your navigation expects returned params, you can use:
-    //   // navigation.navigate("RoutinesHome", { newRoutine: routine })
-    //   console.log("Saved routine:", routine);
-    // }
+    if (aCross) {
+      return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
+    }
+
+    if (bCross) {
+      return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
+    }
   };
 
-  // useEffect(() => {
-  //   navigation.setOptions({
-  //     title: mode === "edit" ? "Edit Routine" : "Add Routine",
-  //     headerTitleAlign: "center",
-  //   });
-  // }, [navigation, mode]);
+  const validateAndSave = async () => {
+    if (!label.trim()) {
+      return Alert.alert("Missing Name", "Please enter a routine name.");
+    }
+
+    if (!days.some((d) => d)) {
+      return Alert.alert("Missing Days", "Please select at least one day.");
+    }
+
+    const startM = startTime.getHours() * 60 + startTime.getMinutes();
+    const endM = endTime.getHours() * 60 + endTime.getMinutes();
+
+    // --- LOAD ALL ROUTINES WITH DAYS ---
+    const routines = await db.getAllAsync(`
+    SELECT r.*, d.day 
+    FROM routines r
+    LEFT JOIN routine_days d ON r.id = d.routineId
+  `);
+
+    // Group days per routine
+    const grouped = {};
+    routines.forEach((row) => {
+      if (!grouped[row.id]) grouped[row.id] = { ...row, days: [] };
+      if (row.day) grouped[row.id].days.push(row.day);
+    });
+
+    const routinesList = Object.values(grouped);
+
+    // --- CHECK CONFLICT ---
+    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    for (let r of routinesList) {
+      if (existing?.id === r.id) continue;
+
+      // Check if they share any day
+      const share = r.days.some((day) => {
+        const idx = dayNames.indexOf(day);
+        return days[idx];
+      });
+
+      if (!share) continue;
+
+      if (intervalsOverlap(startM, endM, r.start_minutes, r.end_minutes)) {
+        return Alert.alert(
+          "Time Conflict",
+          `This routine overlaps with "${r.title}".`
+        );
+      }
+    }
+
+    // --- SAVE ROUTINE ---
+    if (mode === "add") {
+      const result = await db.runAsync(
+        `INSERT INTO routines 
+        (title, start_time, end_time, start_minutes, end_minutes)
+       VALUES (?, ?, ?, ?, ?);`,
+        [
+          label.trim(),
+          startTime.toISOString(),
+          endTime.toISOString(),
+          startM,
+          endM,
+        ]
+      );
+      const newId = result.lastInsertRowId;
+
+      // insert days
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      for (let i = 0; i < days.length; i++) {
+        if (days[i]) {
+          await db.runAsync(
+            `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
+            [newId, dayNames[i]]
+          );
+        }
+      }
+    } else {
+      // update routine
+      await db.runAsync(
+        `UPDATE routines SET 
+        title=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+       WHERE id=?`,
+        [
+          label.trim(),
+          startTime.toISOString(),
+          endTime.toISOString(),
+          startM,
+          endM,
+          existing.id,
+        ]
+      );
+
+      // delete old days
+      await db.runAsync(`DELETE FROM routine_days WHERE routineId=?`, [
+        existing.id,
+      ]);
+
+      // insert new days
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      for (let i = 0; i < days.length; i++) {
+        if (days[i]) {
+          await db.runAsync(
+            `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
+            [existing.id, dayNames[i]]
+          );
+        }
+      }
+    }
+    console.log("Success");
+    // Alert.alert("Success", "Routine saved!");
+    navigation.goBack();
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -159,11 +229,11 @@ export default function EditRoutine() {
 
         {/* Label */}
         <View style={styles.section}>
-          <Text style={styles.label}>Label (optional)</Text>
+          <Text style={styles.label}>Routine Name</Text>
           <TextInput
             style={styles.input}
             placeholderTextColor="#999"
-            placeholder="e.g. Office, Gym, Study"
+            placeholder="Enter routine name"
             value={label}
             onChangeText={setLabel}
             returnKeyType="done"

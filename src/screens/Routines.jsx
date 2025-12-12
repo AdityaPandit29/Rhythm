@@ -5,14 +5,59 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Pressable,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
+import { useSQLiteContext } from "expo-sqlite";
+import { useEffect, useState } from "react";
 import RoutineCard from "../components/RoutineCard";
 
 export default function Routines() {
   const navigation = useNavigation();
+  const db = useSQLiteContext();
+
+  const [routines, setRoutines] = useState([]);
+
+  // Load all routines + their days
+  const loadRoutines = async () => {
+    try {
+      // Fetch routines
+      const routineRows = await db.getAllAsync(`
+        SELECT * FROM routines ORDER BY id DESC;
+      `);
+
+      // Fetch days separately
+      const daysRows = await db.getAllAsync(`
+        SELECT routineId, day FROM routine_days;
+      `);
+
+      // Convert days to a structure like: { 1: ["Mon","Tue"], 2:["Sat"], ... }
+      const dayMap = {};
+      for (let row of daysRows) {
+        if (!dayMap[row.routineId]) dayMap[row.routineId] = [];
+        dayMap[row.routineId].push(row.day);
+      }
+
+      // Merge routines + days into final list
+      const finalList = routineRows.map((r) => ({
+        id: r.id,
+        name: r.title,
+        startTime: r.start_time,
+        endTime: r.end_time,
+        daysSelected: dayMap[r.id] || [], // e.g. ["Mon","Wed"]
+      }));
+
+      setRoutines(finalList);
+    } catch (err) {
+      console.log("Load routines error:", err);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", loadRoutines);
+    return unsubscribe; // reload on screen focus
+  }, [navigation]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
@@ -33,7 +78,7 @@ export default function Routines() {
           <Text style={styles.addRoutineText}>Add Routine</Text>
         </TouchableOpacity>
 
-        <RoutineCard
+        {/* <RoutineCard
           name="Office"
           startTime="8:00 AM"
           endTime="5:00 PM"
@@ -44,7 +89,20 @@ export default function Routines() {
           startTime="6:00 PM"
           endTime="7:00 PM"
           daysSelected={[false, false, false, false, false, true, true]}
-        />
+        /> */}
+
+        {/* Render routines from DB */}
+        {routines.map((r) => (
+          <RoutineCard
+            key={r.id}
+            id={r.id}
+            name={r.name}
+            startTime={new Date(r.startTime)}
+            endTime={new Date(r.endTime)}
+            daysSelected={r.daysSelected} // ["Mon","Wed"]
+            onDeleted={loadRoutines}
+          />
+        ))}
       </ScrollView>
     </SafeAreaView>
   );

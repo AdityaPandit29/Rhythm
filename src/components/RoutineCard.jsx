@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
+import { useSQLiteContext } from "expo-sqlite";
 
 export default function RoutineCard({
   id,
@@ -9,10 +10,48 @@ export default function RoutineCard({
   startTime,
   endTime,
   daysSelected,
-  onEdit,
-  onDelete,
+  onDeleted,
 }) {
   const navigation = useNavigation();
+  const db = useSQLiteContext();
+
+  // Convert ["Mon","Wed","Fri"] → [true,false,true,false,true,false,false]
+  const allDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const booleanDays = allDays.map((d) => daysSelected.includes(d));
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Routine",
+      `Are you sure you want to delete "${name}"?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Yes",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await db.runAsync(
+                `DELETE FROM routine_days WHERE routineId = ?`,
+                [id]
+              );
+              await db.runAsync(`DELETE FROM routines WHERE id = ?`, [id]);
+
+              // 👉 Trigger refresh in parent
+              if (onDeleted) {
+                onDeleted();
+              }
+            } catch (err) {
+              console.error("Delete error:", err);
+              Alert.alert("Error", "Failed to delete routine.");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.card}>
@@ -20,12 +59,23 @@ export default function RoutineCard({
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditRoutine", { mode: "edit" })}
+          onPress={() =>
+            navigation.navigate("EditRoutine", {
+              mode: "edit",
+              routine: {
+                id: id,
+                label: name,
+                startTime: startTime,
+                endTime: endTime,
+                days: booleanDays,
+              },
+            })
+          }
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
           <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
       </View>
@@ -35,7 +85,17 @@ export default function RoutineCard({
 
       {/* SCHEDULED TIME */}
       <Text style={styles.subText}>
-        {startTime} - {endTime}
+        {startTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}{" "}
+        -{" "}
+        {endTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}
       </Text>
 
       {/* WEEKDAY */}
@@ -45,13 +105,13 @@ export default function RoutineCard({
             key={index}
             style={[
               styles.dayBubbleSmall,
-              !daysSelected[index] && { backgroundColor: "#EFEFFF" },
+              !booleanDays[index] && { backgroundColor: "#EFEFFF" },
             ]}
           >
             <Text
               style={[
                 styles.dayTextSmall,
-                !daysSelected[index] && { color: "#444" },
+                !booleanDays[index] && { color: "#444" },
               ]}
             >
               {day}
