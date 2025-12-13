@@ -1,8 +1,0 @@
-Primary: #6c63ffff (purplish)
-Success: #4CAF50
-Warning: #FFC107
-Danger: #F44336
-Background: #F8F9FC
-
-
-  
