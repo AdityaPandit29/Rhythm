@@ -40,5 +40,8 @@ yarn-error.*
 /ios
 /android
 
+# vscode
+.vscode/
+
 futureUpdates.txt
 tasksIdea.txt
