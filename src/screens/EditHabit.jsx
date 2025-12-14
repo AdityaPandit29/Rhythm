@@ -10,14 +10,18 @@ import {
   Switch,
   Modal,
   FlatList,
+  Alert,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useState } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useSQLiteContext } from "expo-sqlite";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function EditHabit() {
+  const db = useSQLiteContext();
+
   const navigation = useNavigation();
   const route = useRoute();
   const params = route.params || {};
@@ -29,14 +33,12 @@ export default function EditHabit() {
   const [habitName, setHabitName] = useState(existing.habitName ?? "");
   const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
 
-  const [isAuto, setIsAuto] = useState(existing.isAuto ?? true);
+  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 1);
 
-  const [selectedHours, setSelectedHours] = useState(
-    existing.selectedHours ?? 0
-  );
-  const [selectedMinutes, setSelectedMinutes] = useState(
-    existing.selectedMinutes ?? 0
-  );
+  const duration = existing.duration ?? 0;
+
+  const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
+  const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
 
   const [startTime, setStartTime] = useState(
     existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
@@ -59,12 +61,212 @@ export default function EditHabit() {
     if (selectedTime) setStartTime(selectedTime);
   };
 
-  const validateAndSave = () => {
-    // TODO: VALIDATE USER INPUT
-    // TODO: SAVE HABIT INTO LOCAL DB OR SECURE STORE
-    // TODO: HANDLE AUTO-SCHEDULING
+  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
+    const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
 
-    navigation.goBack();
+    const aCross = aStart > aEnd; // crosses midnight
+    const bCross = bStart > bEnd; // crosses midnight
+
+    if (!aCross && !bCross) {
+      return check(aStart, aEnd, bStart, bEnd);
+    }
+
+    if (aCross && bCross) {
+      return true; // both span midnight → guaranteed overlap
+    }
+
+    if (aCross) {
+      return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
+    }
+
+    if (bCross) {
+      return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
+    }
+  };
+
+  const validateAndSave = async () => {
+    try {
+      /* ---------- BASIC VALIDATION ---------- */
+      if (!habitName.trim()) {
+        return Alert.alert("Missing Name", "Please enter a habit name.");
+      }
+
+      if (!days.some((d) => d)) {
+        return Alert.alert("Missing Days", "Please select at least one day.");
+      }
+
+      const durationMinutes = selectedHours * 60 + selectedMinutes;
+
+      if (durationMinutes <= 0) {
+        return Alert.alert(
+          "Invalid Duration",
+          "Please select a valid duration."
+        );
+      }
+
+      /* ---------- CALCULATE TIME ---------- */
+      let finalStartTime = null;
+      let finalEndTime = null;
+      let startM = null;
+      let endM = null;
+
+      if (!isAuto) {
+        // MANUAL HABIT
+        startM = startTime.getHours() * 60 + startTime.getMinutes();
+        endM = (startM + durationMinutes) % 1440;
+
+        finalStartTime = startTime;
+        finalEndTime = new Date(startTime.getTime() + durationMinutes * 60000); // 1 minute = 60,000 ms
+      } else {
+        // AUTO HABIT
+        // 🚧 scheduling algorithm will go here later
+        // For now: block save without algorithm
+        return Alert.alert(
+          "Auto Scheduling",
+          "Auto scheduling will be available soon."
+        );
+      }
+
+      /* ---------- LOAD ROUTINES + HABITS FOR CONFLICT ---------- */
+      const rows = await db.getAllAsync(`
+      SELECT 
+        r.start_minutes AS start_minutes,
+        r.end_minutes AS end_minutes,
+        d.day AS day,
+        'routine' AS type,
+        r.id AS itemId
+      FROM routines r
+      LEFT JOIN routine_days d ON r.id = d.routineId
+
+      UNION ALL
+
+      SELECT 
+        h.start_minutes AS start_minutes,
+        h.end_minutes AS end_minutes,
+        hd.day AS day,
+        'habit' AS type,
+        h.id AS itemId
+      FROM habits h
+      LEFT JOIN habit_days hd ON h.id = hd.habitId
+    `);
+
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+      const grouped = {};
+      rows.forEach((row) => {
+        const key = `${row.type}-${row.itemId}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            start_minutes: row.start_minutes,
+            end_minutes: row.end_minutes,
+            days: [],
+            type: row.type,
+            id: row.itemId,
+          };
+        }
+        if (row.day) grouped[key].days.push(row.day);
+      });
+
+      const items = Object.values(grouped);
+
+      /* ---------- CONFLICT CHECK ---------- */
+      for (let item of items) {
+        // Skip self when editing habit
+        if (
+          mode === "edit" &&
+          item.type === "habit" &&
+          item.id === existing?.id
+        ) {
+          continue;
+        }
+
+        const shareDay = item.days.some((day) => {
+          const idx = dayNames.indexOf(day);
+          return days[idx];
+        });
+
+        if (!shareDay) continue;
+
+        if (
+          intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+        ) {
+          return Alert.alert(
+            "Time Conflict",
+            `This habit overlaps with an existing ${item.type}.`
+          );
+        }
+      }
+
+      /* ---------- SAVE HABIT ---------- */
+      if (mode === "add") {
+        const result = await db.runAsync(
+          `INSERT INTO habits
+        (title, duration_minutes, is_auto, start_time, end_time, start_minutes, end_minutes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            habitName.trim(),
+            durationMinutes,
+            isAuto ? 1 : 0,
+            finalStartTime?.toISOString(),
+            finalEndTime?.toISOString(),
+            startM,
+            endM,
+          ]
+        );
+
+        const newId = result.lastInsertRowId;
+        if (!newId) throw new Error("Failed to insert habit.");
+
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+              [newId, dayNames[i]]
+            );
+          }
+        }
+      } else {
+        if (!existing?.id) throw new Error("Missing habit id.");
+
+        await db.runAsync(
+          `UPDATE habits SET
+          title=?, duration_minutes=?, is_auto=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+         WHERE id=?`,
+          [
+            habitName.trim(),
+            durationMinutes,
+            isAuto ? 1 : 0,
+            finalStartTime?.toISOString(),
+            finalEndTime?.toISOString(),
+            startM,
+            endM,
+            existing.id,
+          ]
+        );
+
+        await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
+          existing.id,
+        ]);
+
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+              [existing.id, dayNames[i]]
+            );
+          }
+        }
+      }
+
+      console.log("Habit saved successfully.");
+      navigation.goBack();
+    } catch (err) {
+      console.error("validateAndSave (habit) error:", err);
+      Alert.alert(
+        "Save Failed",
+        err?.message || "Something went wrong while saving the habit."
+      );
+    }
   };
 
   /* ---------------------- RENDER HELPERS ----------------------- */

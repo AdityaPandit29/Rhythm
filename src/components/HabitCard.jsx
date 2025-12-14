@@ -1,21 +1,56 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
+import { useSQLiteContext } from "expo-sqlite";
 
 export default function HabitCard({
   id,
   name,
   duration,
-  isAutomatic,
-  scheduledTime,
-  daysSelected,
-  currentStreak,
+  isAuto,
+  startTime,
+  endTime,
   bestStreak,
-  onEdit,
-  onDelete,
+  currentStreak,
+  daysSelected,
+  onDeleted,
 }) {
   const navigation = useNavigation();
+  const db = useSQLiteContext();
+
+  // Convert ["Mon","Wed","Fri"] → [true,false,true,false,true,false,false]
+  const allDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const booleanDays = allDays.map((d) => daysSelected.includes(d));
+  const h = Math.floor(duration / 60);
+  const m = duration % 60;
+
+  const handleDelete = () => {
+    Alert.alert("Delete Habit", `Are you sure you want to delete "${name}"?`, [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await db.runAsync(`DELETE FROM habit_days WHERE habitId = ?`, [id]);
+            await db.runAsync(`DELETE FROM habits WHERE id = ?`, [id]);
+
+            // 👉 Trigger refresh in parent
+            if (onDeleted) {
+              onDeleted();
+            }
+          } catch (err) {
+            console.error("Delete error:", err);
+            Alert.alert("Error", "Failed to delete routine.");
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={styles.card}>
@@ -23,12 +58,25 @@ export default function HabitCard({
       <View style={styles.iconRow}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => navigation.navigate("EditHabit", { mode: "edit" })}
+          onPress={() =>
+            navigation.navigate("EditHabit", {
+              mode: "edit",
+              habit: {
+                id: id,
+                habitName: name,
+                isAuto: isAuto,
+                startTime: startTime,
+                duration: duration,
+                // endTime: endTime,
+                days: booleanDays,
+              },
+            })
+          }
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconBtn}>
+        <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
           <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
       </View>
@@ -38,13 +86,26 @@ export default function HabitCard({
 
       {/* TIME */}
       <Text style={styles.schedule}>
-        Scheduled : {scheduledTime?.start} - {scheduledTime?.end}
+        Scheduled :{" "}
+        {startTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}{" "}
+        -{" "}
+        {endTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}
       </Text>
 
       {/* DURATION */}
       <View style={styles.durationRow}>
         <Entypo name="stopwatch" size={16} color="#555" />
-        <Text style={styles.durationText}>Duration: {duration}</Text>
+        <Text style={styles.durationText}>Duration:</Text>
+        {h > 0 && <Text style={styles.durationText}>{h}h</Text>}
+        {m > 0 && <Text style={styles.durationText}>{m}min</Text>}
       </View>
 
       {/* WEEKDAY */}
@@ -54,13 +115,13 @@ export default function HabitCard({
             key={index}
             style={[
               styles.dayBubbleSmall,
-              !daysSelected[index] && { backgroundColor: "#EFEFFF" },
+              !booleanDays[index] && { backgroundColor: "#EFEFFF" },
             ]}
           >
             <Text
               style={[
                 styles.dayTextSmall,
-                !daysSelected[index] && { color: "#444" },
+                !booleanDays[index] && { color: "#444" },
               ]}
             >
               {day}
@@ -91,13 +152,13 @@ export default function HabitCard({
         </View>
       </View>
       {/* BUTTONS */}
-      <View style={styles.btnRow}>
-        {isAutomatic && (
+      {isAuto === 1 && (
+        <View style={styles.btnRow}>
           <TouchableOpacity style={styles.rescheduleBtn}>
             <Text style={styles.rescheduleText}>Reschedule</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }

@@ -100,116 +100,131 @@ export default function EditRoutine() {
   };
 
   const validateAndSave = async () => {
-    if (!label.trim()) {
-      return Alert.alert("Missing Name", "Please enter a routine name.");
-    }
+    try {
+      if (!label.trim()) {
+        return Alert.alert("Missing Name", "Please enter a routine name.");
+      }
 
-    if (!days.some((d) => d)) {
-      return Alert.alert("Missing Days", "Please select at least one day.");
-    }
+      if (!days.some((d) => d)) {
+        return Alert.alert("Missing Days", "Please select at least one day.");
+      }
 
-    const startM = startTime.getHours() * 60 + startTime.getMinutes();
-    const endM = endTime.getHours() * 60 + endTime.getMinutes();
+      const startM = startTime.getHours() * 60 + startTime.getMinutes();
+      const endM = endTime.getHours() * 60 + endTime.getMinutes();
 
-    // --- LOAD ALL ROUTINES WITH DAYS ---
-    const routines = await db.getAllAsync(`
-    SELECT r.*, d.day 
-    FROM routines r
-    LEFT JOIN routine_days d ON r.id = d.routineId
-  `);
+      // --- LOAD ALL ROUTINES WITH DAYS ---
+      const routines = await db.getAllAsync(`
+        SELECT r.*, d.day 
+        FROM routines r
+        LEFT JOIN routine_days d ON r.id = d.routineId
+      `);
 
-    // Group days per routine
-    const grouped = {};
-    routines.forEach((row) => {
-      if (!grouped[row.id]) grouped[row.id] = { ...row, days: [] };
-      if (row.day) grouped[row.id].days.push(row.day);
-    });
-
-    const routinesList = Object.values(grouped);
-
-    // --- CHECK CONFLICT ---
-    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-    for (let r of routinesList) {
-      if (existing?.id === r.id) continue;
-
-      // Check if they share any day
-      const share = r.days.some((day) => {
-        const idx = dayNames.indexOf(day);
-        return days[idx];
+      // Group days per routine
+      const grouped = {};
+      routines.forEach((row) => {
+        if (!grouped[row.id]) grouped[row.id] = { ...row, days: [] };
+        if (row.day) grouped[row.id].days.push(row.day);
       });
 
-      if (!share) continue;
+      const routinesList = Object.values(grouped);
 
-      if (intervalsOverlap(startM, endM, r.start_minutes, r.end_minutes)) {
-        return Alert.alert(
-          "Time Conflict",
-          `This routine overlaps with "${r.title}".`
-        );
+      // --- CHECK CONFLICT ---
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+      for (let r of routinesList) {
+        if (existing?.id === r.id) continue;
+
+        // Check if they share any day
+        const share = r.days.some((day) => {
+          const idx = dayNames.indexOf(day);
+          return days[idx];
+        });
+
+        if (!share) continue;
+
+        if (intervalsOverlap(startM, endM, r.start_minutes, r.end_minutes)) {
+          return Alert.alert(
+            "Time Conflict",
+            `This routine overlaps with "${r.title}" — please choose a different time or day.`
+          );
+        }
       }
-    }
 
-    // --- SAVE ROUTINE ---
-    if (mode === "add") {
-      const result = await db.runAsync(
-        `INSERT INTO routines 
+      // --- SAVE ROUTINE ---
+      if (mode === "add") {
+        const result = await db.runAsync(
+          `INSERT INTO routines 
         (title, start_time, end_time, start_minutes, end_minutes)
        VALUES (?, ?, ?, ?, ?);`,
-        [
-          label.trim(),
-          startTime.toISOString(),
-          endTime.toISOString(),
-          startM,
-          endM,
-        ]
-      );
-      const newId = result.lastInsertRowId;
+          [
+            label.trim(),
+            startTime.toISOString(),
+            endTime.toISOString(),
+            startM,
+            endM,
+          ]
+        );
+        const newId = result.lastInsertRowId;
 
-      // insert days
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      for (let i = 0; i < days.length; i++) {
-        if (days[i]) {
-          await db.runAsync(
-            `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-            [newId, dayNames[i]]
-          );
+        if (!newId) {
+          throw new Error("Insert succeeded but couldn't read new row id.");
         }
-      }
-    } else {
-      // update routine
-      await db.runAsync(
-        `UPDATE routines SET 
+
+        // insert days
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
+              [newId, dayNames[i]]
+            );
+          }
+        }
+      } else {
+        // update routine
+        if (!existing?.id) throw new Error("Missing routine id for update.");
+        await db.runAsync(
+          `UPDATE routines SET 
         title=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
        WHERE id=?`,
-        [
-          label.trim(),
-          startTime.toISOString(),
-          endTime.toISOString(),
-          startM,
-          endM,
+          [
+            label.trim(),
+            startTime.toISOString(),
+            endTime.toISOString(),
+            startM,
+            endM,
+            existing.id,
+          ]
+        );
+
+        // delete old days
+        await db.runAsync(`DELETE FROM routine_days WHERE routineId=?`, [
           existing.id,
-        ]
-      );
+        ]);
 
-      // delete old days
-      await db.runAsync(`DELETE FROM routine_days WHERE routineId=?`, [
-        existing.id,
-      ]);
-
-      // insert new days
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      for (let i = 0; i < days.length; i++) {
-        if (days[i]) {
-          await db.runAsync(
-            `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-            [existing.id, dayNames[i]]
-          );
+        // insert new days
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
+              [existing.id, dayNames[i]]
+            );
+          }
         }
       }
+      console.log("Routine saved successfully.");
+      // Alert.alert("Success", "Routine saved!");
+      navigation.goBack();
+    } catch (err) {
+      // catch ANY error and show informative message
+
+      console.error("validateAndSave error:", err);
+
+      const message =
+        (err && err.message) ||
+        "An unknown error occurred while saving. Check console for details.";
+
+      Alert.alert("Save failed", message);
     }
-    console.log("Success");
-    // Alert.alert("Success", "Routine saved!");
-    navigation.goBack();
   };
 
   return (
