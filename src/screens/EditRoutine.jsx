@@ -16,21 +16,6 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useSQLiteContext } from "expo-sqlite";
 
-/**
- * Routine Editor screen (Add / Edit)
- *
- * Fields:
- *  - label (optional)
- *  - startTime (string: "07:30 AM")
- *  - endTime   (string: "09:00 AM")
- *  - days      (array of booleans Mon..Sun)
- *
- * Integration notes:
- * - Replace `openTimePicker` implementation with a proper native time picker
- *   (recommended: expo-datetime-picker or @react-native-community/datetimepicker)
- * - Save action currently calls navigation.goBack({ routine }) — replace with API/DB call as needed.
- */
-
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
 
 export default function EditRoutine() {
@@ -60,6 +45,7 @@ export default function EditRoutine() {
   const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
 
   const toggleDay = (index) => {
+    // const i = (index + 1) % 7;
     const copy = [...days];
     copy[index] = !copy[index];
     setDays(copy);
@@ -99,6 +85,53 @@ export default function EditRoutine() {
     }
   };
 
+  const groupBusyBlocks = (rows) => {
+    const grouped = {};
+    rows.forEach((row) => {
+      const key = `${row.type}-${row.itemId}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: row.start_minutes,
+          end_minutes: row.end_minutes,
+          days: [],
+        };
+      }
+      if (row.day) grouped[key].days.push(row.day);
+    });
+
+    return Object.values(grouped);
+  };
+
+  const findConflict = ({ items, startM, endM }) => {
+    for (let item of items) {
+      // Skip self when editing habit
+      if (
+        mode === "edit" &&
+        item.type === "routine" &&
+        item.id === existing?.id
+      ) {
+        continue;
+      }
+
+      const shareDay = item.days.some((dayIndex) => days[dayIndex]);
+
+      if (!shareDay) continue;
+
+      if (
+        intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+      ) {
+        return {
+          type: item.type,
+          title: item.title,
+        };
+      }
+    }
+    return null;
+  };
+
   const validateAndSave = async () => {
     try {
       if (!label.trim()) {
@@ -112,42 +145,55 @@ export default function EditRoutine() {
       const startM = startTime.getHours() * 60 + startTime.getMinutes();
       const endM = endTime.getHours() * 60 + endTime.getMinutes();
 
-      // --- LOAD ALL ROUTINES WITH DAYS ---
-      const routines = await db.getAllAsync(`
-        SELECT r.*, d.day 
+      // --- LOAD ALL BUSY BLOCKS ---
+      const blocks = await db.getAllAsync(`
+        SELECT  
+          r.start_minutes AS start_minutes,
+          r.end_minutes AS end_minutes,
+          d.day AS day,
+          'routine' AS type,
+          r.id AS itemId,
+          r.title AS title
         FROM routines r
         LEFT JOIN routine_days d ON r.id = d.routineId
+
+        UNION ALL
+
+        SELECT 
+          h.start_minutes AS start_minutes,
+          h.end_minutes AS end_minutes,
+          hd.day AS day,
+          'habit' AS type,
+          h.id AS itemId,
+          h.title AS title
+        FROM habits h
+        LEFT JOIN habit_days hd ON h.id = hd.habitId
+        WHERE h.is_auto = 0
+
+        UNION ALL
+
+        SELECT
+          ts.start_minutes AS start_minutes,
+          ts.end_minutes AS end_minutes,
+          CAST(strftime('%w', ts.date) AS INTEGER) AS day,
+          'task' AS type,
+          t.id AS itemId,
+          t.title AS title
+        FROM task_schedules ts
+        JOIN tasks t ON ts.taskId = t.id
+        WHERE t.is_auto = 0;
       `);
 
-      // Group days per routine
-      const grouped = {};
-      routines.forEach((row) => {
-        if (!grouped[row.id]) grouped[row.id] = { ...row, days: [] };
-        if (row.day) grouped[row.id].days.push(row.day);
-      });
-
-      const routinesList = Object.values(grouped);
+      const busyItems = groupBusyBlocks(blocks);
 
       // --- CHECK CONFLICT ---
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-      for (let r of routinesList) {
-        if (existing?.id === r.id) continue;
-
-        // Check if they share any day
-        const share = r.days.some((day) => {
-          const idx = dayNames.indexOf(day);
-          return days[idx];
-        });
-
-        if (!share) continue;
-
-        if (intervalsOverlap(startM, endM, r.start_minutes, r.end_minutes)) {
-          return Alert.alert(
-            "Time Conflict",
-            `This routine overlaps with "${r.title}" — please choose a different time or day.`
-          );
-        }
+      const conflict = findConflict({ items: busyItems, startM, endM });
+      if (conflict) {
+        return Alert.alert(
+          "Time Conflict",
+          `This habit overlaps with ${conflict.type}: "${conflict.title}".`
+        );
       }
 
       // --- SAVE ROUTINE ---
@@ -175,7 +221,7 @@ export default function EditRoutine() {
           if (days[i]) {
             await db.runAsync(
               `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-              [newId, dayNames[i]]
+              [newId, i]
             );
           }
         }
@@ -206,13 +252,12 @@ export default function EditRoutine() {
           if (days[i]) {
             await db.runAsync(
               `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-              [existing.id, dayNames[i]]
+              [existing.id, i]
             );
           }
         }
       }
       console.log("Routine saved successfully.");
-      // Alert.alert("Success", "Routine saved!");
       navigation.goBack();
     } catch (err) {
       // catch ANY error and show informative message
@@ -316,12 +361,15 @@ export default function EditRoutine() {
                 key={index}
                 style={[
                   styles.dayBubble,
-                  days[index] && { backgroundColor: "#6C63FF" },
+                  days[(index + 1) % 7] && { backgroundColor: "#6C63FF" },
                 ]}
-                onPress={() => toggleDay(index)}
+                onPress={() => toggleDay((index + 1) % 7)}
               >
                 <Text
-                  style={[styles.dayText, days[index] && { color: "#fff" }]}
+                  style={[
+                    styles.dayText,
+                    days[(index + 1) % 7] && { color: "#fff" },
+                  ]}
                 >
                   {d}
                 </Text>

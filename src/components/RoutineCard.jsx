@@ -15,9 +15,13 @@ export default function RoutineCard({
   const navigation = useNavigation();
   const db = useSQLiteContext();
 
-  // Convert ["Mon","Wed","Fri"] → [true,false,true,false,true,false,false]
-  const allDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const booleanDays = allDays.map((d) => daysSelected.includes(d));
+  // daysSelected: number[] (0 = Sun ... 6 = Sat)
+
+  const booleanDays = Array(7).fill(false);
+
+  daysSelected.forEach((day) => {
+    booleanDays[day] = true;
+  });
 
   const handleDelete = () => {
     Alert.alert(
@@ -105,13 +109,13 @@ export default function RoutineCard({
             key={index}
             style={[
               styles.dayBubbleSmall,
-              !booleanDays[index] && { backgroundColor: "#EFEFFF" },
+              !booleanDays[(index + 1) % 7] && { backgroundColor: "#EFEFFF" },
             ]}
           >
             <Text
               style={[
                 styles.dayTextSmall,
-                !booleanDays[index] && { color: "#444" },
+                !booleanDays[(index + 1) % 7] && { color: "#444" },
               ]}
             >
               {day}

@@ -7,6 +7,7 @@ export default function DatabaseSetup() {
   useEffect(() => {
     const createTables = async () => {
       await db.execAsync(`
+
         CREATE TABLE IF NOT EXISTS routines (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
@@ -20,7 +21,7 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS routine_days (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           routineId INTEGER,
-          day TEXT NOT NULL,
+          day INTEGER NOT NULL,
           FOREIGN KEY (routineId) REFERENCES routines(id)
         );
 
@@ -43,14 +44,38 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS habit_days (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           habitId INTEGER NOT NULL,
-          day TEXT NOT NULL,
+          day INTEGER NOT NULL,
           FOREIGN KEY (habitId) REFERENCES habits(id)
         );
 
+        CREATE TABLE IF NOT EXISTS tasks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          priority TEXT CHECK (priority IN ('High','Medium','Low')) DEFAULT 'Medium',
+          is_auto INTEGER DEFAULT 1,    
+          deadline TEXT,                     
+          total_duration INTEGER,             -- minutes (required if is_auto = 1)
+          duration_left INTEGER,         -- minutes (ONLY for auto tasks)
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS task_schedules (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          taskId INTEGER NOT NULL,
+          date TEXT NOT NULL,             -- YYYY-MM-DD (scheduled day)
+          start_time TEXT,
+          end_time TEXT,
+          start_minutes INTEGER,
+          end_minutes INTEGER,
+          duration INTEGER,               -- working minutes THIS day
+          FOREIGN KEY (taskId)
+          REFERENCES tasks(id)
+          ON DELETE CASCADE
+        );
 
       `);
 
-      console.log("routine and routine_days tables created.");
+      console.log("all tables created.");
     };
 
     createTables();

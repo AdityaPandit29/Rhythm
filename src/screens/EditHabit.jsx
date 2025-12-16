@@ -84,6 +84,53 @@ export default function EditHabit() {
     }
   };
 
+  const groupBusyBlocks = (rows) => {
+    const grouped = {};
+    rows.forEach((row) => {
+      const key = `${row.type}-${row.itemId}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: row.start_minutes,
+          end_minutes: row.end_minutes,
+          days: [],
+        };
+      }
+      if (row.day) grouped[key].days.push(row.day);
+    });
+
+    return Object.values(grouped);
+  };
+
+  const findConflict = ({ items, startM, endM }) => {
+    for (let item of items) {
+      // Skip self when editing habit
+      if (
+        mode === "edit" &&
+        item.type === "habit" &&
+        item.id === existing?.id
+      ) {
+        continue;
+      }
+
+      const shareDay = item.days.some((dayIndex) => days[dayIndex]);
+
+      if (!shareDay) continue;
+
+      if (
+        intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+      ) {
+        return {
+          type: item.type,
+          title: item.title,
+        };
+      }
+    }
+    return null;
+  };
+
   const validateAndSave = async () => {
     try {
       /* ---------- BASIC VALIDATION ---------- */
@@ -97,7 +144,7 @@ export default function EditHabit() {
 
       const durationMinutes = selectedHours * 60 + selectedMinutes;
 
-      if (durationMinutes <= 0) {
+      if (durationMinutes === 0) {
         return Alert.alert(
           "Invalid Duration",
           "Please select a valid duration."
@@ -110,14 +157,48 @@ export default function EditHabit() {
       let startM = null;
       let endM = null;
 
-      if (!isAuto) {
-        // MANUAL HABIT
-        startM = startTime.getHours() * 60 + startTime.getMinutes();
-        endM = (startM + durationMinutes) % 1440;
+      /* ---------- LOAD ALL BUSY BLOCKS ---------- */
+      const blocks = await db.getAllAsync(`
+        SELECT  
+          r.start_minutes AS start_minutes,
+          r.end_minutes AS end_minutes,
+          d.day AS day,
+          'routine' AS type,
+          r.id AS itemId,
+          r.title AS title
+        FROM routines r
+        LEFT JOIN routine_days d ON r.id = d.routineId
 
-        finalStartTime = startTime;
-        finalEndTime = new Date(startTime.getTime() + durationMinutes * 60000); // 1 minute = 60,000 ms
-      } else {
+        UNION ALL
+
+        SELECT 
+          h.start_minutes AS start_minutes,
+          h.end_minutes AS end_minutes,
+          hd.day AS day,
+          'habit' AS type,
+          h.id AS itemId,
+          h.title AS title
+        FROM habits h
+        LEFT JOIN habit_days hd ON h.id = hd.habitId
+        WHERE h.is_auto = 0
+
+        UNION ALL
+
+        SELECT
+          ts.start_minutes AS start_minutes,
+          ts.end_minutes AS end_minutes,
+          CAST(strftime('%w', ts.date) AS INTEGER) AS day,
+          'task' AS type,
+          t.id AS itemId,
+          t.title AS title
+        FROM task_schedules ts
+        JOIN tasks t ON ts.taskId = t.id
+        WHERE t.is_auto = 0;
+    `);
+
+      const busyItems = groupBusyBlocks(blocks);
+
+      if (isAuto) {
         // AUTO HABIT
         // 🚧 scheduling algorithm will go here later
         // For now: block save without algorithm
@@ -125,135 +206,81 @@ export default function EditHabit() {
           "Auto Scheduling",
           "Auto scheduling will be available soon."
         );
-      }
+      } else {
+        // MANUAL HABIT
+        startM = startTime.getHours() * 60 + startTime.getMinutes();
+        endM = (startM + durationMinutes) % 1440;
 
-      /* ---------- LOAD ROUTINES + HABITS FOR CONFLICT ---------- */
-      const rows = await db.getAllAsync(`
-      SELECT 
-        r.start_minutes AS start_minutes,
-        r.end_minutes AS end_minutes,
-        d.day AS day,
-        'routine' AS type,
-        r.id AS itemId
-      FROM routines r
-      LEFT JOIN routine_days d ON r.id = d.routineId
+        finalStartTime = startTime;
+        finalEndTime = new Date(startTime.getTime() + durationMinutes * 60000); // 1 minute = 60,000 ms
 
-      UNION ALL
-
-      SELECT 
-        h.start_minutes AS start_minutes,
-        h.end_minutes AS end_minutes,
-        hd.day AS day,
-        'habit' AS type,
-        h.id AS itemId
-      FROM habits h
-      LEFT JOIN habit_days hd ON h.id = hd.habitId
-    `);
-
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-      const grouped = {};
-      rows.forEach((row) => {
-        const key = `${row.type}-${row.itemId}`;
-        if (!grouped[key]) {
-          grouped[key] = {
-            start_minutes: row.start_minutes,
-            end_minutes: row.end_minutes,
-            days: [],
-            type: row.type,
-            id: row.itemId,
-          };
-        }
-        if (row.day) grouped[key].days.push(row.day);
-      });
-
-      const items = Object.values(grouped);
-
-      /* ---------- CONFLICT CHECK ---------- */
-      for (let item of items) {
-        // Skip self when editing habit
-        if (
-          mode === "edit" &&
-          item.type === "habit" &&
-          item.id === existing?.id
-        ) {
-          continue;
-        }
-
-        const shareDay = item.days.some((day) => {
-          const idx = dayNames.indexOf(day);
-          return days[idx];
-        });
-
-        if (!shareDay) continue;
-
-        if (
-          intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-        ) {
+        /* ---------- CONFLICT CHECK ---------- */
+        const conflict = findConflict({ items: busyItems, startM, endM });
+        if (conflict) {
           return Alert.alert(
             "Time Conflict",
-            `This habit overlaps with an existing ${item.type}.`
+            `This habit overlaps with ${conflict.type}: "${conflict.title}".`
           );
         }
-      }
 
-      /* ---------- SAVE HABIT ---------- */
-      if (mode === "add") {
-        const result = await db.runAsync(
-          `INSERT INTO habits
-        (title, duration_minutes, is_auto, start_time, end_time, start_minutes, end_minutes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            habitName.trim(),
-            durationMinutes,
-            isAuto ? 1 : 0,
-            finalStartTime?.toISOString(),
-            finalEndTime?.toISOString(),
-            startM,
-            endM,
-          ]
-        );
+        /* ---------- SAVE HABIT ---------- */
+        if (mode === "add") {
+          const result = await db.runAsync(
+            `INSERT INTO habits
+            (title, duration_minutes, is_auto, start_time, end_time, start_minutes, end_minutes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              habitName.trim(),
+              durationMinutes,
+              isAuto ? 1 : 0,
+              finalStartTime?.toISOString(),
+              finalEndTime?.toISOString(),
+              startM,
+              endM,
+            ]
+          );
 
-        const newId = result.lastInsertRowId;
-        if (!newId) throw new Error("Failed to insert habit.");
+          const newId = result.lastInsertRowId;
+          if (!newId) throw new Error("Failed to insert habit.");
 
-        for (let i = 0; i < days.length; i++) {
-          if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-              [newId, dayNames[i]]
-            );
+          for (let i = 0; i < days.length; i++) {
+            if (days[i]) {
+              await db.runAsync(
+                `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+                [newId, i]
+              );
+            }
           }
-        }
-      } else {
-        if (!existing?.id) throw new Error("Missing habit id.");
+        } else {
+          if (!existing?.id) throw new Error("Missing habit id.");
 
-        await db.runAsync(
-          `UPDATE habits SET
-          title=?, duration_minutes=?, is_auto=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
-         WHERE id=?`,
-          [
-            habitName.trim(),
-            durationMinutes,
-            isAuto ? 1 : 0,
-            finalStartTime?.toISOString(),
-            finalEndTime?.toISOString(),
-            startM,
-            endM,
+          await db.runAsync(
+            `UPDATE habits SET
+              title=?, duration_minutes=?, is_auto=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+            WHERE id=?`,
+            [
+              habitName.trim(),
+              durationMinutes,
+              isAuto ? 1 : 0,
+              finalStartTime?.toISOString(),
+              finalEndTime?.toISOString(),
+              startM,
+              endM,
+              existing.id,
+            ]
+          );
+
+          await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
             existing.id,
-          ]
-        );
+          ]);
 
-        await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
-          existing.id,
-        ]);
-
-        for (let i = 0; i < days.length; i++) {
-          if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-              [existing.id, dayNames[i]]
-            );
+          for (let i = 0; i < days.length; i++) {
+            if (days[i]) {
+              await db.runAsync(
+                `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+                [existing.id, i]
+              );
+            }
           }
         }
       }
@@ -367,12 +394,15 @@ export default function EditHabit() {
                 key={index}
                 style={[
                   styles.dayBubble,
-                  days[index] && { backgroundColor: "#6C63FF" },
+                  days[(index + 1) % 7] && { backgroundColor: "#6C63FF" },
                 ]}
-                onPress={() => toggleDay(index)}
+                onPress={() => toggleDay((index + 1) % 7)}
               >
                 <Text
-                  style={[styles.dayText, days[index] && { color: "#fff" }]}
+                  style={[
+                    styles.dayText,
+                    days[(index + 1) % 7] && { color: "#fff" },
+                  ]}
                 >
                   {d}
                 </Text>

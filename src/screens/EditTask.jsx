@@ -10,13 +10,17 @@ import {
   Switch,
   Modal,
   FlatList,
+  Alert,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
+import { useSQLiteContext } from "expo-sqlite";
 
 export default function EditTask() {
+  const db = useSQLiteContext();
+
   const navigation = useNavigation();
   const route = useRoute();
   const params = route.params || {};
@@ -25,23 +29,25 @@ export default function EditTask() {
   const existing = params.task || {};
 
   const priorityColors = {
-    high: "#FF5555",
-    medium: "#F7B801",
-    low: "#4CAF50",
+    High: "#FF5555",
+    Medium: "#F7B801",
+    Low: "#4CAF50",
   };
 
   /* ------------------------- STATES ------------------------- */
   const [taskName, setTaskName] = useState(existing.taskName ?? "");
-  const [isMonthly, setIsMonthly] = useState(existing.isMonthly ?? false);
-  const [priority, setPriority] = useState(existing.priority ?? "medium");
-  const [isAuto, setIsAuto] = useState(existing.isAuto ?? true);
-  const [deadline, setDeadline] = useState(existing.deadline ?? new Date());
-  const [selectedHours, setSelectedHours] = useState(
-    existing.selectedHours ?? 0
+  // const [isMonthly, setIsMonthly] = useState(existing.isMonthly ?? false);
+  const [priority, setPriority] = useState(existing.priority ?? "Medium");
+  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 1);
+  const [deadline, setDeadline] = useState(
+    existing.deadline ?? new Date(new Date().setHours(23, 59, 0, 0))
   );
-  const [selectedMinutes, setSelectedMinutes] = useState(
-    existing.selectedMinutes ?? 0
-  );
+
+  const duration = existing?.durationLeft ?? 0;
+
+  const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
+
+  const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
 
   const [startTime, setStartTime] = useState(
     existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
@@ -107,9 +113,324 @@ export default function EditTask() {
     }
   };
 
-  const validateAndSave = () => {
-    // 👉 VALIDATE & SAVE LOGIC HERE
-    navigation.goBack();
+  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
+    const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
+
+    const aCross = aStart > aEnd; // crosses midnight
+    const bCross = bStart > bEnd; // crosses midnight
+
+    if (!aCross && !bCross) {
+      return check(aStart, aEnd, bStart, bEnd);
+    }
+
+    if (aCross && bCross) {
+      return true; // both span midnight → guaranteed overlap
+    }
+
+    if (aCross) {
+      return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
+    }
+
+    if (bCross) {
+      return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
+    }
+  };
+
+  const findConflict = ({
+    items,
+    selectedDays, // boolean[7] (0 = Sun)
+    startM,
+    endM,
+    skip = null,
+  }) => {
+    for (let item of items) {
+      if (skip && item.type === skip.type && item.id === skip.id) continue;
+
+      /* ---------- DAY CHECK ---------- */
+      const dayOverlap = item.days.some((dayIndex) => selectedDays[dayIndex]);
+
+      if (!dayOverlap) continue;
+
+      /* ---------- TIME CHECK ---------- */
+      if (
+        intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+      ) {
+        return {
+          type: item.type,
+          title: item.title,
+        };
+      }
+    }
+    return null;
+  };
+
+  const groupBusyBlocks = (rows) => {
+    const grouped = {};
+
+    rows.forEach((row) => {
+      const key = `${row.type}-${row.itemId}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: row.start_minutes,
+          end_minutes: row.end_minutes,
+          days: [],
+        };
+      }
+
+      if (row.day !== null && row.day !== undefined) {
+        if (!grouped[key].days.includes(row.day)) {
+          grouped[key].days.push(row.day);
+        }
+      }
+    });
+
+    return Object.values(grouped);
+  };
+
+  const validateAndSave = async () => {
+    try {
+      /* ---------- BASIC VALIDATION ---------- */
+      if (!taskName.trim()) {
+        return Alert.alert("Missing Title", "Please enter a task title.");
+      }
+
+      /* ---------- DEADLINE VALIDATION ---------- */
+      const deadlineDate = new Date(deadline);
+
+      // Deadline date is before today (ignore time)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const deadlineDay = new Date(deadlineDate);
+      deadlineDay.setHours(0, 0, 0, 0);
+
+      if (deadlineDay < today) {
+        return Alert.alert(
+          "Invalid Deadline",
+          "Deadline cannot be in the past."
+        );
+      }
+
+      /* ---------- MANUAL TASK TIME CHECK ---------- */
+      if (!isAuto && deadlineDay.getTime() === today.getTime()) {
+        const now = new Date();
+        const end = new Date(endTime);
+
+        if (end <= now) {
+          return Alert.alert(
+            "Invalid End Time",
+            "End time must be later than the current time."
+          );
+        }
+      }
+
+      const totalMinutes = selectedHours * 60 + selectedMinutes;
+      console.log(totalMinutes);
+      console.log(isAuto);
+
+      let startM = null;
+      let endM = null;
+      let finalStart = null;
+      let finalEnd = null;
+
+      /* ---------- LOAD ALL BLOCKS ---------- */
+      const blocks = await db.getAllAsync(`
+        SELECT 
+          r.start_minutes AS start_minutes,
+          r.end_minutes AS end_minutes,
+          d.day AS day,
+          'routine' AS type,
+          r.id AS itemId,
+          r.title AS title
+        FROM routines r
+        LEFT JOIN routine_days d ON r.id = d.routineId
+
+        UNION ALL
+
+        SELECT 
+          h.start_minutes AS start_minutes,
+          h.end_minutes AS end_minutes,
+          hd.day AS day,
+          'habit' AS type,
+          h.id AS itemId,
+          h.title AS title
+        FROM habits h
+        LEFT JOIN habit_days hd ON h.id = hd.habitId
+        WHERE h.is_auto = 0
+
+        UNION ALL
+
+        SELECT
+          ts.start_minutes AS start_minutes,
+          ts.end_minutes AS end_minutes,
+          CAST(strftime('%w', ts.date) AS INTEGER) AS day,
+          'task' AS type,
+          t.id AS itemId,
+          t.title AS title
+        FROM task_schedules ts
+        JOIN tasks t ON ts.taskId = t.id
+        WHERE t.is_auto = 0;
+
+      `);
+
+      const busyItems = groupBusyBlocks(blocks);
+
+      /* ---------- AUTO TASK ---------- */
+
+      if (isAuto && totalMinutes === 0) {
+        // quick task → skip scheduling, BUT DO NOT RETURN
+      } else if (isAuto) {
+        // 1. compute free slots from busyItems
+        // 2. allocate
+        // 3. DO NOT check conflicts manually
+        return Alert.alert(
+          "Auto Scheduling",
+          "Auto scheduling will be available soon."
+        );
+      } else {
+        /* ---------- MANUAL TASK ---------- */
+        startM = startTime.getHours() * 60 + startTime.getMinutes();
+        endM = endTime.getHours() * 60 + endTime.getMinutes();
+
+        const duration = (endM - startM + 1440) % 1440;
+
+        if (duration === 0) {
+          return Alert.alert(
+            "Invalid Time",
+            "End time must be differ from start time."
+          );
+        }
+
+        finalStart = startTime;
+        finalEnd = endTime;
+
+        /* ---------- CHECK CONFLICT ---------- */
+
+        // index: 0 = Sun ... 6 = Sat
+        const now = new Date();
+
+        let startDate = new Date();
+        let endDate = new Date(deadline);
+
+        startDate.setHours(
+          finalStart.getHours(),
+          finalStart.getMinutes(),
+          0,
+          0
+        );
+
+        endDate.setHours(finalEnd.getHours(), finalEnd.getMinutes(), 0, 0);
+
+        // if today's slot already passed → start tomorrow
+        if (startDate <= now) {
+          startDate.setDate(startDate.getDate() + 1);
+        }
+
+        // if the time slot is after the deadline then end one day before
+        if (endDate > deadline) {
+          endDate.setDate(endDate.getDate() - 1);
+        }
+        const selectedDays = Array(7).fill(false);
+
+        for (
+          let d = new Date(startDate);
+          d <= endDate;
+          d.setDate(d.getDate() + 1)
+        ) {
+          selectedDays[d.getDay()] = true;
+        }
+
+        const conflict = findConflict({
+          items: busyItems,
+          selectedDays, // derived from date range or weekday
+          startM,
+          endM,
+          skip: mode === "edit" ? { type: "task", id: existing.id } : null,
+        });
+
+        if (conflict) {
+          return Alert.alert(
+            "Time Conflict",
+            `This task overlaps with ${conflict.type}: "${conflict.title}".`
+          );
+        }
+
+        /* ---------- SAVE TASK ---------- */
+        let taskId;
+
+        if (mode === "add") {
+          const res = await db.runAsync(
+            `INSERT INTO tasks
+         (title, priority, is_auto, deadline, total_duration, duration_left, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              taskName.trim(),
+              priority,
+              0,
+              deadline?.toISOString(),
+              null,
+              null,
+              new Date().toISOString(),
+            ]
+          );
+          taskId = res.lastInsertRowId;
+        } else {
+          taskId = existing.id;
+
+          await db.runAsync(
+            `UPDATE tasks SET
+          title=?, priority=?, is_auto=?, deadline=?, total_duration=?, duration_left=?
+         WHERE id=?`,
+            [
+              taskName.trim(),
+              priority,
+              0,
+              deadline?.toISOString(),
+              null,
+              null,
+              taskId,
+            ]
+          );
+
+          await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
+            taskId,
+          ]);
+        }
+
+        /* ---------- INSERT MANUAL SCHEDULES ---------- */
+        for (
+          let d = new Date(startDate);
+          d <= endDate;
+          d.setDate(d.getDate() + 1)
+        ) {
+          await db.runAsync(
+            `INSERT INTO task_schedules
+          (taskId, date, start_time, end_time, start_minutes, end_minutes)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              taskId,
+              d.toISOString().split("T")[0],
+              finalStart.toISOString(),
+              finalEnd.toISOString(),
+              startM,
+              endM,
+            ]
+          );
+        }
+      }
+
+      navigation.goBack();
+    } catch (err) {
+      console.error("validateAndSave (habit) error:", err);
+      Alert.alert(
+        "Save Failed",
+        err?.message || "Something went wrong while saving the habit."
+      );
+    }
   };
 
   /* ---------------------- RENDER HELPERS ----------------------- */
@@ -177,7 +498,7 @@ export default function EditTask() {
         </View>
 
         {/* MONTHLY TOGGLE */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>Repeat Monthly</Text>
             <Switch
@@ -187,7 +508,7 @@ export default function EditTask() {
               thumbColor="#fff"
             />
           </View>
-        </View>
+        </View> */}
 
         {/* PRIORITY */}
         <View style={styles.section}>
@@ -198,20 +519,20 @@ export default function EditTask() {
             <Pressable
               style={[
                 styles.typeOption,
-                priority === "low" && { backgroundColor: "#6C63FF" },
+                priority === "Low" && { backgroundColor: "#6C63FF" },
               ]}
-              onPress={() => setPriority("low")}
+              onPress={() => setPriority("Low")}
             >
               <View
                 style={[
                   styles.priorityDot,
-                  { backgroundColor: priorityColors["low"] },
+                  { backgroundColor: priorityColors["Low"] },
                 ]}
               />
               <Text
                 style={[
                   styles.typeText,
-                  priority === "low" && { color: "white" },
+                  priority === "Low" && { color: "white" },
                 ]}
               >
                 Low
@@ -222,20 +543,20 @@ export default function EditTask() {
             <Pressable
               style={[
                 styles.typeOption,
-                priority === "medium" && { backgroundColor: "#6C63FF" },
+                priority === "Medium" && { backgroundColor: "#6C63FF" },
               ]}
-              onPress={() => setPriority("medium")}
+              onPress={() => setPriority("Medium")}
             >
               <View
                 style={[
                   styles.priorityDot,
-                  { backgroundColor: priorityColors["medium"] },
+                  { backgroundColor: priorityColors["Medium"] },
                 ]}
               />
               <Text
                 style={[
                   styles.typeText,
-                  priority === "medium" && { color: "white" },
+                  priority === "Medium" && { color: "white" },
                 ]}
               >
                 Medium
@@ -246,25 +567,60 @@ export default function EditTask() {
             <Pressable
               style={[
                 styles.typeOption,
-                priority === "high" && { backgroundColor: "#6C63FF" },
+                priority === "High" && { backgroundColor: "#6C63FF" },
               ]}
-              onPress={() => setPriority("high")}
+              onPress={() => setPriority("High")}
             >
               <View
                 style={[
                   styles.priorityDot,
-                  { backgroundColor: priorityColors["high"] },
+                  { backgroundColor: priorityColors["High"] },
                 ]}
               />
               <Text
                 style={[
                   styles.typeText,
-                  priority === "high" && { color: "white" },
+                  priority === "High" && { color: "white" },
                 ]}
               >
                 High
               </Text>
             </Pressable>
+          </View>
+        </View>
+
+        {/* DEADLINE */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Deadline</Text>
+          <View style={styles.timeRow}>
+            {/* DATE PICKER */}
+            <TouchableOpacity
+              style={styles.timeCard}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.timeSmall}>Date</Text>
+              <Text style={styles.timeLarge}>
+                {formatDeadlineDate(deadline)}
+              </Text>
+            </TouchableOpacity>
+
+            {/* TIME PICKER */}
+            <TouchableOpacity
+              style={styles.timeCard}
+              onPress={() => {
+                setActivePicker("deadline");
+                setShowTimePicker(true);
+              }}
+            >
+              <Text style={styles.timeSmall}>Time</Text>
+              <Text style={styles.timeLarge}>
+                {deadline.toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -285,41 +641,6 @@ export default function EditTask() {
 
         {isAuto ? (
           <>
-            {/* DEADLINE */}
-            <View style={styles.section}>
-              <Text style={styles.label}>Deadline</Text>
-              <View style={styles.timeRow}>
-                {/* DATE PICKER */}
-                <TouchableOpacity
-                  style={styles.timeCard}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={styles.timeSmall}>Date</Text>
-                  <Text style={styles.timeLarge}>
-                    {formatDeadlineDate(deadline)}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* TIME PICKER */}
-                <TouchableOpacity
-                  style={styles.timeCard}
-                  onPress={() => {
-                    setActivePicker("deadline");
-                    setShowTimePicker(true);
-                  }}
-                >
-                  <Text style={styles.timeSmall}>Time</Text>
-                  <Text style={styles.timeLarge}>
-                    {deadline.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
             {/* IF AUTO-SCHEDULE ON → SHOW DURATION INPUTS */}
             {/* DURATION */}
             <View style={styles.section}>
@@ -450,7 +771,7 @@ export default function EditTask() {
   );
 }
 
-/* -------------------------------- STYLES (Same as EditHabit) -------------------------------- */
+/* -------------------------------- STYLES -------------------------------- */
 
 const styles = StyleSheet.create({
   safeArea: {

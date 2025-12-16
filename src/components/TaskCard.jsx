@@ -1,27 +1,100 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
+import { useSQLiteContext } from "expo-sqlite";
 
 export default function TaskCard({
   id,
   name,
-  isMonthly,
-  deadline, // 👉 { date: "...", time: "..." }
-  priority, // High | Medium | Low
-  isAuto, // auto-schedule ON/OFF
-  duration, // "1 hr 20 min" OR "0"
-  scheduledTime, // 👉 { start: "9:00 AM", end: "10:30 AM" }
-  recommendedTime, // 👉 "4:30 PM" (only when duration=0)
-  onReschedule,
-  onDone,
+  priority,
+  isAuto,
+  deadline,
+  startTimes,
+  endTimes,
+  scheduledDates,
+  durations,
+  totalDuration,
+  durationLeft,
+  onDeleted,
 }) {
   const navigation = useNavigation();
+  const db = useSQLiteContext();
+  const deadlineDate = new Date(deadline);
+  const startTime = new Date(startTimes[0]);
+  const endTime = new Date(endTimes[0]);
 
   const priorityColors = {
     High: "#FF5555",
     Medium: "#F7B801",
     Low: "#4CAF50",
+  };
+
+  const formatRelativeDeadline = (isoDate) => {
+    if (!isoDate) return "";
+
+    const date = new Date(isoDate);
+
+    // Normalize dates (ignore time)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const target = new Date(date);
+    target.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+    let dayLabel;
+
+    if (diffDays === 0) {
+      dayLabel = "Today";
+    } else if (diffDays === 1) {
+      dayLabel = "Tomorrow";
+    } else if (diffDays === -1) {
+      dayLabel = "Yesterday";
+    } else {
+      dayLabel = date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+
+    const time = date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    return `${dayLabel} at ${time}`;
+  };
+
+  const handleDelete = () => {
+    Alert.alert("Delete Task", `Are you sure you want to delete "${name}"?`, [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [
+              id,
+            ]);
+            await db.runAsync(`DELETE FROM tasks WHERE id = ?`, [id]);
+
+            if (onDeleted) {
+              onDeleted();
+            }
+          } catch (err) {
+            console.error("Delete error:", err);
+            Alert.alert("Error", "Failed to delete task.");
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -34,12 +107,14 @@ export default function TaskCard({
             navigation.navigate("EditTask", {
               mode: "edit",
               task: {
+                id: id,
                 taskName: name,
-                isMonthly: isMonthly,
                 priority: priority,
                 isAuto: isAuto,
-                // startTime: scheduledTime.start,
-                // endTime: scheduledTime.end,
+                deadline: deadlineDate,
+                durationLeft: durationLeft, // used for selected Hours and Minutes
+                startTime: startTime,
+                endTime: endTime,
               },
             })
           }
@@ -47,10 +122,7 @@ export default function TaskCard({
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.iconBtn}
-          // 👉 onPress: delete task logic
-        >
+        <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
           <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
       </View>
@@ -70,44 +142,47 @@ export default function TaskCard({
           <Text style={styles.priorityText}>{priority} Priority</Text>
         </View>
 
-        {isMonthly && <Text style={styles.monthlyBadge}>Monthly</Text>}
-        {isAuto && <Text style={styles.monthlyBadge}>Auto</Text>}
+        {isAuto === 1 && <Text style={styles.monthlyBadge}>Auto</Text>}
+        {totalDuration && totalDuration === 0 && (
+          <Text style={styles.monthlyBadge}>Quick</Text>
+        )}
       </View>
 
-      {/* DEADLINE if isAuto === true */}
-      {isAuto && (
-        <Text style={styles.subText}>
-          Due: {deadline?.date} at {deadline?.time}
-        </Text>
-      )}
+      {/* DEADLINE */}
+      <Text style={styles.subText}>
+        Due : {`${formatRelativeDeadline(deadlineDate)}`}
+      </Text>
 
       {/* SCHEDULE AND DURATION */}
-      {duration === "0" ? (
-        <>
-          <Text style={styles.schedule}>
-            Can be done at <Text style={styles.bold}>{recommendedTime}</Text>
-          </Text>
-        </>
-      ) : (
-        <>
-          <Text style={styles.schedule}>
-            Scheduled : {scheduledTime?.start} - {scheduledTime?.end}
-          </Text>
-          <View style={styles.durationRow}>
-            <Entypo name="stopwatch" size={16} color="#555" />
-            <Text style={styles.durationText}>Duration: {duration}</Text>
-          </View>
-        </>
+      <Text style={styles.schedule}>
+        Scheduled :{" "}
+        {startTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}{" "}
+        -{" "}
+        {endTime.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })}
+      </Text>
+      {isAuto === 1 && (
+        <View style={styles.durationRow}>
+          <Entypo name="stopwatch" size={16} color="#555" />
+          <Text style={styles.durationText}>Duration: {durations[0]}</Text>
+        </View>
       )}
 
       {/* BUTTONS */}
-      <View style={styles.btnRow}>
-        {isAuto && (
+      {isAuto === 1 && (
+        <View style={styles.btnRow}>
           <TouchableOpacity style={styles.rescheduleBtn} onPress={onReschedule}>
             <Text style={styles.rescheduleText}>Reschedule</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
