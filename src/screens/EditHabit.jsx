@@ -33,20 +33,14 @@ export default function EditHabit() {
   const [habitName, setHabitName] = useState(existing.habitName ?? "");
   const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
 
-  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 1);
-
-  const duration = existing.duration ?? 0;
-
-  const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
-  const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
-
   const [startTime, setStartTime] = useState(
-    existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
+    existing.startTime ?? new Date(new Date().setHours(18, 0, 0, 0))
   );
+  const [endTime, setEndTime] = useState(
+    existing.endTime ?? new Date(new Date().setHours(19, 0, 0, 0))
+  );
+  const [activePicker, setActivePicker] = useState(null); // "start" or "end"
   const [showTimePicker, setShowTimePicker] = useState(false);
-
-  const [showHourModal, setShowHourModal] = useState(false);
-  const [showMinuteModal, setShowMinuteModal] = useState(false);
 
   /* ------------------------- FUNCTIONS ------------------------- */
 
@@ -58,7 +52,13 @@ export default function EditHabit() {
 
   const onChangeTime = (event, selectedTime) => {
     setShowTimePicker(false);
-    if (selectedTime) setStartTime(selectedTime);
+    if (!selectedTime) return;
+
+    if (activePicker === "start") {
+      setStartTime(selectedTime);
+    } else {
+      setEndTime(selectedTime);
+    }
   };
 
   const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
@@ -142,20 +142,8 @@ export default function EditHabit() {
         return Alert.alert("Missing Days", "Please select at least one day.");
       }
 
-      const durationMinutes = selectedHours * 60 + selectedMinutes;
-
-      if (durationMinutes === 0) {
-        return Alert.alert(
-          "Invalid Duration",
-          "Please select a valid duration."
-        );
-      }
-
-      /* ---------- CALCULATE TIME ---------- */
-      let finalStartTime = null;
-      let finalEndTime = null;
-      let startM = null;
-      let endM = null;
+      const startM = startTime.getHours() * 60 + startTime.getMinutes();
+      const endM = endTime.getHours() * 60 + endTime.getMinutes();
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const blocks = await db.getAllAsync(`
@@ -180,8 +168,7 @@ export default function EditHabit() {
           h.title AS title
         FROM habits h
         LEFT JOIN habit_days hd ON h.id = hd.habitId
-        WHERE h.is_auto = 0
-
+        
         UNION ALL
 
         SELECT
@@ -198,89 +185,69 @@ export default function EditHabit() {
 
       const busyItems = groupBusyBlocks(blocks);
 
-      if (isAuto) {
-        // AUTO HABIT
-        // 🚧 scheduling algorithm will go here later
-        // For now: block save without algorithm
+      /* ---------- CONFLICT CHECK ---------- */
+      const conflict = findConflict({ items: busyItems, startM, endM });
+      if (conflict) {
         return Alert.alert(
-          "Auto Scheduling",
-          "Auto scheduling will be available soon."
+          "Time Conflict",
+          `This habit overlaps with ${conflict.type}: "${conflict.title}".`
         );
-      } else {
-        // MANUAL HABIT
-        startM = startTime.getHours() * 60 + startTime.getMinutes();
-        endM = (startM + durationMinutes) % 1440;
+      }
 
-        finalStartTime = startTime;
-        finalEndTime = new Date(startTime.getTime() + durationMinutes * 60000); // 1 minute = 60,000 ms
+      /* ---------- SAVE HABIT ---------- */
+      if (mode === "add") {
+        const result = await db.runAsync(
+          `INSERT INTO habits
+            (title, start_time, end_time, start_minutes, end_minutes)
+            VALUES (?, ?, ?, ?, ?)`,
+          [
+            habitName.trim(),
+            startTime.toISOString(),
+            endTime.toISOString(),
+            startM,
+            endM,
+          ]
+        );
 
-        /* ---------- CONFLICT CHECK ---------- */
-        const conflict = findConflict({ items: busyItems, startM, endM });
-        if (conflict) {
-          return Alert.alert(
-            "Time Conflict",
-            `This habit overlaps with ${conflict.type}: "${conflict.title}".`
-          );
-        }
+        const newId = result.lastInsertRowId;
+        if (!newId)
+          throw new Error("Insert succeeded but couldn't read new row id.");
 
-        /* ---------- SAVE HABIT ---------- */
-        if (mode === "add") {
-          const result = await db.runAsync(
-            `INSERT INTO habits
-            (title, duration_minutes, is_auto, start_time, end_time, start_minutes, end_minutes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-              habitName.trim(),
-              durationMinutes,
-              isAuto ? 1 : 0,
-              finalStartTime?.toISOString(),
-              finalEndTime?.toISOString(),
-              startM,
-              endM,
-            ]
-          );
-
-          const newId = result.lastInsertRowId;
-          if (!newId) throw new Error("Failed to insert habit.");
-
-          for (let i = 0; i < days.length; i++) {
-            if (days[i]) {
-              await db.runAsync(
-                `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-                [newId, i]
-              );
-            }
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+              [newId, i]
+            );
           }
-        } else {
-          if (!existing?.id) throw new Error("Missing habit id.");
+        }
+      } else {
+        if (!existing?.id) throw new Error("Missing habit id for update.");
 
-          await db.runAsync(
-            `UPDATE habits SET
-              title=?, duration_minutes=?, is_auto=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+        await db.runAsync(
+          `UPDATE habits SET
+              title=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
             WHERE id=?`,
-            [
-              habitName.trim(),
-              durationMinutes,
-              isAuto ? 1 : 0,
-              finalStartTime?.toISOString(),
-              finalEndTime?.toISOString(),
-              startM,
-              endM,
-              existing.id,
-            ]
-          );
-
-          await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
+          [
+            habitName.trim(),
+            startTime.toISOString(),
+            endTime.toISOString(),
+            startM,
+            endM,
             existing.id,
-          ]);
+          ]
+        );
 
-          for (let i = 0; i < days.length; i++) {
-            if (days[i]) {
-              await db.runAsync(
-                `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-                [existing.id, i]
-              );
-            }
+        await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
+          existing.id,
+        ]);
+
+        for (let i = 0; i < days.length; i++) {
+          if (days[i]) {
+            await db.runAsync(
+              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
+              [existing.id, i]
+            );
           }
         }
       }
@@ -295,44 +262,6 @@ export default function EditHabit() {
       );
     }
   };
-
-  /* ---------------------- RENDER HELPERS ----------------------- */
-
-  const renderPickerModal = (visible, setVisible, data, onSelect) => (
-    <Modal transparent visible={visible} animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select</Text>
-
-          <FlatList
-            data={data}
-            keyExtractor={(item) => item.toString()}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.modalItem,
-                  pressed && { backgroundColor: "#F7F7FF" },
-                ]}
-                onPress={() => {
-                  onSelect(item);
-                  setVisible(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>{item}</Text>
-              </Pressable>
-            )}
-          />
-
-          <TouchableOpacity
-            style={styles.modalClose}
-            onPress={() => setVisible(false)}
-          >
-            <Text style={styles.modalCloseText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -360,30 +289,57 @@ export default function EditHabit() {
           />
         </View>
 
-        {/* DURATION */}
+        {/* Time */}
         <View style={styles.section}>
-          <Text style={styles.label}>Duration</Text>
+          <Text style={styles.label}>Time</Text>
 
           <View style={styles.timeRow}>
-            {/* HOURS */}
+            {/* Start Time */}
             <TouchableOpacity
               style={styles.timeCard}
-              onPress={() => setShowHourModal(true)}
+              onPress={() => {
+                setActivePicker("start");
+                setShowTimePicker(true);
+              }}
             >
-              <Text style={styles.timeSmall}>Hours</Text>
-              <Text style={styles.timeLarge}>{selectedHours} h</Text>
+              <Text style={styles.timeSmall}>Start</Text>
+              <Text style={styles.timeLarge}>
+                {startTime.toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
+              </Text>
             </TouchableOpacity>
 
-            {/* MINUTES */}
+            {/* End Time */}
             <TouchableOpacity
               style={styles.timeCard}
-              onPress={() => setShowMinuteModal(true)}
+              onPress={() => {
+                setActivePicker("end");
+                setShowTimePicker(true);
+              }}
             >
-              <Text style={styles.timeSmall}>Minutes</Text>
-              <Text style={styles.timeLarge}>{selectedMinutes} min</Text>
+              <Text style={styles.timeSmall}>End</Text>
+              <Text style={styles.timeLarge}>
+                {endTime.toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={activePicker === "start" ? startTime : endTime}
+            mode="time"
+            display="spinner"
+            onChange={onChangeTime}
+          />
+        )}
 
         {/* WEEKDAY SELECTOR */}
         <View style={styles.section}>
@@ -411,52 +367,6 @@ export default function EditHabit() {
           </View>
         </View>
 
-        {/* AUTO-SCHEDULE */}
-        <View style={styles.section}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleText}>
-              Auto-schedule the best time for this habit
-            </Text>
-
-            <Switch
-              value={isAuto}
-              onValueChange={setIsAuto}
-              trackColor={{ false: "#ccc", true: "#6C63FF" }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
-
-        {/* TIME PICKER */}
-        {!isAuto && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Start Time</Text>
-            <View style={styles.timeRow}>
-              <TouchableOpacity
-                style={styles.timeCard}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Text style={styles.timeLarge}>
-                  {startTime.toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
-                  })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {showTimePicker && (
-          <DateTimePicker
-            value={startTime}
-            mode="time"
-            display="spinner"
-            onChange={onChangeTime}
-          />
-        )}
-
         {/* SAVE BUTTON */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.saveBtn} onPress={validateAndSave}>
@@ -464,21 +374,6 @@ export default function EditHabit() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* MODALS */}
-      {renderPickerModal(
-        showHourModal,
-        setShowHourModal,
-        [...Array(13).keys()], // 0–12 hours
-        setSelectedHours
-      )}
-
-      {renderPickerModal(
-        showMinuteModal,
-        setShowMinuteModal,
-        [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
-        setSelectedMinutes
-      )}
     </SafeAreaView>
   );
 }

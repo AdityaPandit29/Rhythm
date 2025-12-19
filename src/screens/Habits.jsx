@@ -43,8 +43,6 @@ export default function Habits() {
       const finalList = habitRows.map((h) => ({
         id: h.id,
         name: h.title,
-        duration: h.duration_minutes,
-        isAuto: h.is_auto,
         startTime: h.start_time,
         endTime: h.end_time,
         bestStreak: h.best_streak,
@@ -83,34 +81,12 @@ export default function Habits() {
           <Text style={styles.addHabitText}>Add Habit</Text>
         </TouchableOpacity>
 
-        {/* <HabitCard
-          name="Reading"
-          duration="25 min"
-          isFlexible={false}
-          isAutomatic={true}
-          scheduledTime={{ start: "7:00 PM", end: "8:00 PM" }}
-          daysSelected={[true, false, true, false, true, false, false]}
-          currentStreak="4"
-          bestStreak="14"
-        />
-        <HabitCard
-          name="Meditation"
-          duration="15 min"
-          isFlexible={true}
-          scheduledTime={{ start: "7:00 PM", end: "8:00 PM" }}
-          daysSelected={[true, true, true, true, true, true, true]}
-          currentStreak="1500"
-          bestStreak="1000"
-        /> */}
-
         {/* Render habits from DB */}
         {habits.map((h) => (
           <HabitCard
             key={h.id}
             id={h.id}
             name={h.name}
-            duration={h.duration}
-            isAuto={h.isAuto}
             startTime={new Date(h.startTime)}
             endTime={new Date(h.endTime)}
             bestStreak={h.bestStreak}

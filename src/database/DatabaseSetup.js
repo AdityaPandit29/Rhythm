@@ -7,7 +7,6 @@ export default function DatabaseSetup() {
   useEffect(() => {
     const createTables = async () => {
       await db.execAsync(`
-
         CREATE TABLE IF NOT EXISTS routines (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
@@ -28,15 +27,10 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS habits (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
-          duration_minutes INTEGER NOT NULL,
-          is_auto INTEGER NOT NULL DEFAULT 1, 
-
           start_time TEXT,       
           end_time TEXT,           
-
           start_minutes INTEGER,    
           end_minutes INTEGER,      
-
           current_streak INTEGER DEFAULT 0,
           best_streak INTEGER DEFAULT 0
         );
@@ -75,7 +69,11 @@ export default function DatabaseSetup() {
 
       `);
 
-      console.log("all tables created.");
+      const schema = await db.getAllAsync(`
+        SELECT sql FROM sqlite_master 
+        WHERE type='table' AND name='habits';
+      `);
+      console.log(schema);
     };
 
     createTables();

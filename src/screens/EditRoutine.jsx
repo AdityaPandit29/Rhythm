@@ -1,5 +1,4 @@
-// RoutineEditorScreen.js
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -13,7 +12,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useSQLiteContext } from "expo-sqlite";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
@@ -168,7 +166,6 @@ export default function EditRoutine() {
           h.title AS title
         FROM habits h
         LEFT JOIN habit_days hd ON h.id = hd.habitId
-        WHERE h.is_auto = 0
 
         UNION ALL
 

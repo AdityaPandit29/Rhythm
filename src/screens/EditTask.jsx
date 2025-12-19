@@ -260,7 +260,6 @@ export default function EditTask() {
           h.title AS title
         FROM habits h
         LEFT JOIN habit_days hd ON h.id = hd.habitId
-        WHERE h.is_auto = 0
 
         UNION ALL
 

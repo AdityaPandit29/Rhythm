@@ -88,7 +88,7 @@ export default function RoutineCard({
       <Text style={styles.title}>{name}</Text>
 
       {/* SCHEDULED TIME */}
-      <Text style={styles.subText}>
+      <Text style={styles.schedule}>
         {startTime.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
@@ -174,6 +174,13 @@ const styles = StyleSheet.create({
   subText: {
     fontSize: 13,
     color: "#777",
+  },
+
+  schedule: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#444",
+    marginTop: 6,
   },
 
   daysRow: {

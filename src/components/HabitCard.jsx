@@ -7,8 +7,6 @@ import { useSQLiteContext } from "expo-sqlite";
 export default function HabitCard({
   id,
   name,
-  duration,
-  isAuto,
   startTime,
   endTime,
   bestStreak,
@@ -27,8 +25,8 @@ export default function HabitCard({
     booleanDays[day] = true;
   });
 
-  const h = Math.floor(duration / 60);
-  const m = duration % 60;
+  // const h = Math.floor(duration / 60);
+  // const m = duration % 60;
 
   const handleDelete = () => {
     Alert.alert("Delete Habit", `Are you sure you want to delete "${name}"?`, [
@@ -69,10 +67,7 @@ export default function HabitCard({
               habit: {
                 id: id,
                 habitName: name,
-                isAuto: isAuto,
                 startTime: startTime,
-                duration: duration,
-                // endTime: endTime,
                 days: booleanDays,
               },
             })
@@ -91,7 +86,6 @@ export default function HabitCard({
 
       {/* TIME */}
       <Text style={styles.schedule}>
-        Scheduled :{" "}
         {startTime.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
@@ -106,12 +100,12 @@ export default function HabitCard({
       </Text>
 
       {/* DURATION */}
-      <View style={styles.durationRow}>
+      {/* <View style={styles.durationRow}>
         <Entypo name="stopwatch" size={16} color="#555" />
         <Text style={styles.durationText}>Duration:</Text>
         {h > 0 && <Text style={styles.durationText}>{h}h</Text>}
         {m > 0 && <Text style={styles.durationText}>{m}min</Text>}
-      </View>
+      </View> */}
 
       {/* WEEKDAY */}
       <View style={styles.daysRow}>
@@ -156,14 +150,14 @@ export default function HabitCard({
           <Text style={styles.streakText}>Best: {bestStreak} days</Text>
         </View>
       </View>
-      {/* BUTTONS */}
+      {/* BUTTONS
       {isAuto === 1 && (
         <View style={styles.btnRow}>
           <TouchableOpacity style={styles.rescheduleBtn}>
             <Text style={styles.rescheduleText}>Reschedule</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
     </View>
   );
 }
