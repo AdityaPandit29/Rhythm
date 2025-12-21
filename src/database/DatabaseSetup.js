@@ -44,7 +44,8 @@ export default function DatabaseSetup() {
 
           -- Only meaningful for AUTO tasks
           priority TEXT CHECK (priority IN ('High','Low')) DEFAULT 'Low',
-          deadline TEXT,
+          deadline_date TEXT,
+          deadline_minutes INTEGER, 
           total_duration INTEGER,
           duration_left INTEGER,
 
@@ -69,11 +70,16 @@ export default function DatabaseSetup() {
         );        
       `);
 
-      // const res = await db.getAllAsync(`
-      //   SELECT * FROM routines;
-      // `);
+      const res = await db.getAllAsync(`
+        SELECT * FROM tasks;
+      `);
 
-      // console.log(res);
+      const pes = await db.getAllAsync(`
+        SELECT * FROM task_schedules;
+      `);
+
+      console.log(res);
+      console.log(pes);
     };
 
     createTables();

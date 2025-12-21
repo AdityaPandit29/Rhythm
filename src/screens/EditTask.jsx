@@ -33,6 +33,16 @@ export default function EditTask() {
     Low: "#4CAF50",
   };
 
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
   function minutesToDate(minutes) {
     const now = new Date();
     const date = new Date(
@@ -48,17 +58,26 @@ export default function EditTask() {
   }
 
   /* ------------------------- STATES ------------------------- */
-  const [taskName, setTaskName] = useState(existing.taskName ?? "");
-  const [priority, setPriority] = useState(existing.priority ?? "Low");
-  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 0); // false
-  const [deadline, setDeadline] = useState(
-    existing.deadline ?? new Date(new Date().setHours(23, 59, 0, 0))
+  const [taskName, setTaskName] = useState(existing?.taskName ?? "");
+  const [priority, setPriority] = useState(existing?.priority ?? "Low");
+  const [isAuto, setIsAuto] = useState((existing?.isAuto ?? 1) === 1); // false
+  const [deadlineDate, setDeadlineDate] = useState(
+    existing?.deadlineDate
+      ? new Date(existing.deadlineDate.split("/").reverse().join("-"))
+      : new Date(new Date().setHours(0, 0, 0, 0))
   );
 
-  const [date, setDate] = useState(
-    existing.date ?? new Date(new Date().setHours(0, 0, 0, 0))
+  const [deadlineMinutes, setDeadlineMinutes] = useState(
+    existing?.deadlineMinutes ?? 1439
   );
-  // console.log(date);
+
+  // console.log(existing.scheduledDates);
+
+  const [date, setDate] = useState(
+    existing?.scheduledDate
+      ? new Date(existing.scheduledDate.split("/").reverse().join("-"))
+      : new Date(new Date().setHours(0, 0, 0, 0))
+  );
 
   const duration = existing?.durationLeft ?? 0;
 
@@ -66,16 +85,10 @@ export default function EditTask() {
 
   const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
 
-  const [startTime, setStartTime] = useState(
-    existing?.start_minutes
-      ? minutesToDate(existing.start_minutes)
-      : minutesToDate(540)
+  const [startMinutes, setStartMinutes] = useState(
+    existing?.startMinutes ?? 1080
   );
-  const [endTime, setEndTime] = useState(
-    existing?.end_minutes
-      ? minutesToDate(existing.end_minutes)
-      : minutesToDate(600)
-  );
+  const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1140);
 
   const [activeTimePicker, setActiveTimePicker] = useState(null);
   const [activeDatePicker, setActiveDatePicker] = useState(null);
@@ -90,12 +103,12 @@ export default function EditTask() {
 
   const onChangeDate = (event, selectedDate) => {
     setShowDatePicker(false);
-    if (activeDatePicker === "deadline") {
-      const updated = new Date(deadline);
+    if (activeDatePicker === "deadlineDate") {
+      const updated = new Date(deadlineDate);
       updated.setFullYear(selectedDate.getFullYear());
       updated.setMonth(selectedDate.getMonth());
       updated.setDate(selectedDate.getDate());
-      setDeadline(updated);
+      setDeadlineDate(updated);
     } else {
       const updated = new Date(date);
       updated.setFullYear(selectedDate.getFullYear());
@@ -129,15 +142,14 @@ export default function EditTask() {
     setShowTimePicker(false);
     if (!selectedTime) return;
 
+    const minutes = selectedTime.getHours() * 60 + selectedTime.getMinutes();
+
     if (activeTimePicker === "start") {
-      setStartTime(selectedTime);
+      setStartMinutes(minutes);
     } else if (activeTimePicker === "end") {
-      setEndTime(selectedTime);
+      setEndMinutes(minutes);
     } else {
-      const updated = new Date(deadline);
-      updated.setHours(selectedTime.getHours());
-      updated.setMinutes(selectedTime.getMinutes());
-      setDeadline(updated);
+      setDeadlineMinutes(minutes);
     }
   };
 
@@ -164,12 +176,13 @@ export default function EditTask() {
     }
   };
 
-  const findConflict = ({ items, date, startM, endM, skip = null }) => {
-    const dateString = date.toISOString().split("T")[0];
+  const findConflict = ({ items, date, startM, endM }) => {
+    const dateString = date.toLocaleDateString().split("T")[0];
     const day = date.getDay();
 
     for (let item of items) {
-      if (skip && item.type === skip.type && item.id === skip.id) continue;
+      if (mode === "edit" && item.type === "task" && item.id === existing?.id)
+        continue;
 
       // ---------- DAY / DATE CHECK ----------
       if (item.type === "task") {
@@ -207,44 +220,45 @@ export default function EditTask() {
     return null;
   };
 
-  const groupBusyBlocks = (rows) => {
+  const groupBusyBlocks = (recurring, tasks) => {
     const grouped = {};
 
-    rows.forEach((row) => {
+    recurring.forEach((row) => {
       const key = `${row.type}-${row.itemId}`;
 
       if (!grouped[key]) {
-        if (row.type === "task") {
-          grouped[key] = {
-            type: row.type,
-            id: row.itemId,
-            title: row.title,
-            start_minutes: [],
-            end_minutes: [],
-            dates: [],
-          };
-        } else {
-          grouped[key] = {
-            type: row.type,
-            id: row.itemId,
-            title: row.title,
-            start_minutes: row.start_minutes,
-            end_minutes: row.end_minutes,
-            days: [],
-          };
-        }
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: row.start_minutes,
+          end_minutes: row.end_minutes,
+          days: [],
+        };
       }
 
-      if (row.day !== undefined && row.day !== null) {
-        if (!grouped[key].days.includes(row.day)) {
-          grouped[key].days.push(row.day);
-        }
+      if (!grouped[key].days.includes(row.day)) {
+        grouped[key].days.push(row.day);
       }
-      if (row.date) {
-        grouped[key].dates.push(row.date);
-        grouped[key].start_minutes.push(row.start_minutes);
-        grouped[key].end_minutes.push(row.end_minutes);
+    });
+
+    tasks.forEach((row) => {
+      const key = `${row.type}-${row.itemId}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: [],
+          end_minutes: [],
+          dates: [],
+        };
       }
+
+      grouped[key].dates.push(row.date);
+      grouped[key].start_minutes.push(row.start_minutes);
+      grouped[key].end_minutes.push(row.end_minutes);
     });
 
     return Object.values(grouped);
@@ -258,7 +272,7 @@ export default function EditTask() {
       }
 
       /* ---------- LOAD ALL BLOCKS ---------- */
-      const blocks = await db.getAllAsync(`
+      const routinesAndHabits = await db.getAllAsync(`
         SELECT 
           r.start_minutes AS start_minutes,
           r.end_minutes AS end_minutes,
@@ -280,9 +294,9 @@ export default function EditTask() {
           h.title AS title
         FROM habits h
         LEFT JOIN habit_days hd ON h.id = hd.habitId
+      `);
 
-        UNION ALL
-
+      const manualTasks = await db.getAllAsync(`
         SELECT
           ts.start_minutes AS start_minutes,
           ts.end_minutes AS end_minutes,
@@ -291,45 +305,247 @@ export default function EditTask() {
           t.id AS itemId,
           t.title AS title
         FROM task_schedules ts
-        JOIN tasks t ON ts.taskId = t.id
+        LEFT JOIN tasks t ON ts.taskId = t.id
         WHERE t.is_auto = 0;
-
       `);
 
-      const busyItems = groupBusyBlocks(blocks);
+      const busyItems = groupBusyBlocks(routinesAndHabits, manualTasks);
 
       /* ---------- AUTO TASK ---------- */
 
       if (isAuto) {
-        if (totalMinutes === 0) {
-          // quick task → skip scheduling, BUT DO NOT RETURN
-        }
-
         /* ---------- DEADLINE VALIDATION ---------- */
-        const deadlineDate = new Date(deadline);
 
         // Deadline date is before today (ignore time)
+        const now = new Date();
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         const deadlineDay = new Date(deadlineDate);
         deadlineDay.setHours(0, 0, 0, 0);
 
-        if (deadlineDay < today) {
-          return Alert.alert(
-            "Invalid Deadline",
-            "Deadline cannot be in the past."
-          );
+        // Combine deadline date + time
+        const deadlineFull = new Date(deadlineDate);
+        deadlineFull.setHours(0, 0, 0, 0);
+        deadlineFull.setMinutes(deadlineMinutes);
+
+        if (
+          deadlineDay < today ||
+          (deadlineDay.getTime() === today.getTime() && deadlineFull < now)
+        ) {
+          Alert.alert("Invalid Deadline", "Deadline cannot be in the past.");
+        }
+        const totalMinutes = selectedHours * 60 + selectedMinutes;
+
+        // quick task
+        if (totalMinutes === 0) {
+          if (mode === "add") {
+            await db.runAsync(
+              `INSERT INTO tasks
+     (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                taskName.trim(),
+                null,
+                1,
+                deadlineDate.toLocaleDateString().split("T")[0],
+                deadlineMinutes,
+                0,
+                null,
+                new Date().toLocaleDateString(),
+              ]
+            );
+          } else {
+            const taskId = existing.id;
+
+            await db.runAsync(
+              `UPDATE tasks SET
+          title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
+         WHERE id=?`,
+              [
+                taskName.trim(),
+                null,
+                1,
+                deadlineDate.toLocaleDateString().split("T")[0],
+                deadlineMinutes,
+                0,
+                null,
+                taskId,
+              ]
+            );
+          }
+        } else {
+          const newAuthority = computeAuthority({
+            priority,
+            deadline: deadlineDate,
+          });
+
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          const maxEnd = new Date(today);
+          maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
+
+          const scheduleEnd = maxEnd;
+          try {
+            await db.runAsync("BEGIN TRANSACTION");
+            let existingAutoTasks = [];
+
+            // free current task’s time
+            if (mode === "edit") {
+              await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [
+                existing.id,
+              ]);
+
+              existingAutoTasks = await db.getAllAsync(
+                `
+        SELECT * FROM tasks
+        WHERE is_auto = 1 AND duration_left > 0 AND id != ?
+      `,
+                [existing.id]
+              );
+            } else {
+              existingAutoTasks = await db.getAllAsync(`
+        SELECT * FROM tasks
+        WHERE is_auto = 1 AND duration_left > 0
+      `);
+            }
+
+            const mappedAutoTasks = existingAutoTasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              duration_left: t.duration_left,
+              deadline: new Date(t.deadline),
+              authority: computeAuthority({
+                priority: t.priority,
+                deadline: new Date(t.deadline),
+              }),
+            }));
+
+            const fixedAutoTasks = [];
+            const reschedulableTasks = [];
+
+            for (const t of mappedAutoTasks) {
+              if (t.authority > newAuthority) {
+                fixedAutoTasks.push(t);
+              } else {
+                reschedulableTasks.push(t);
+              }
+            }
+
+            // push current task
+            reschedulableTasks.push({
+              id: existing?.id ?? null,
+              title: taskName.trim(),
+              duration_left: totalMinutes,
+              deadline: deadlineDate,
+              authority: newAuthority,
+            });
+
+            const fixedIds = fixedAutoTasks.map((t) => t.id);
+
+            let fixedSchedulesRow = [];
+            if (fixedIds.length) {
+              fixedSchedulesRow = await db.getAllAsync(
+                `SELECT ts.start_minutes AS start_minutes,
+            ts.end_minutes AS end_minutes,
+            ts.date AS date,
+            'task' AS type,
+            t.id AS itemId,
+            t.title AS title
+          FROM task_schedules ts
+          JOIN tasks t ON ts.taskId = t.id
+          WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
+                fixedIds
+              );
+            }
+
+            const fixedSchedules = groupBusyBlocks(fixedSchedulesRow);
+
+            const fixedItems = [...busyItems, ...fixedSchedules];
+
+            const calendar = buildCalendar({
+              busyItems: fixedItems,
+              scheduleStart: today,
+              scheduleEnd,
+            });
+
+            const scheduledResults = autoSchedule({
+              calendar,
+              autoTasks: reschedulableTasks.sort(
+                (a, b) => b.authority - a.authority
+              ),
+              scheduleStart: today,
+              scheduleEnd,
+            });
+
+            const affectedTaskIds = reschedulableTasks
+              .filter((t) => t.id !== null)
+              .map((t) => t.id);
+
+            if (affectedTaskIds.length) {
+              await db.runAsync(
+                `DELETE FROM task_schedules
+     WHERE taskId IN (${affectedTaskIds.map(() => "?").join(",")})`,
+                affectedTaskIds
+              );
+            }
+
+            // --- SAVE ---
+            if (mode === "edit") {
+              await db.runAsync(
+                `UPDATE tasks SET
+          title=?, priority=?, is_auto=1, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
+         WHERE id=?`,
+                [
+                  taskName.trim(),
+                  priority,
+                  deadlineDate.toLocaleDateString().split("T")[0],
+                  deadlineMinutes,
+                  totalMinutes,
+                  totalMinutes,
+                  existing.id,
+                ]
+              );
+            } else {
+              await db.runAsync(
+                `INSERT INTO tasks
+     (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+     VALUES (?, ?, 1, ?, ?, ?, ?)`,
+                [
+                  taskName.trim(),
+                  priority,
+                  deadlineDate.toLocaleDateString().split("T")[0],
+                  deadlineMinutes,
+                  totalMinutes,
+                  totalMinutes,
+                  new Date().toISOString(),
+                ]
+              );
+            }
+
+            // const taskId = res.lastInsertRowId;//////////////////////////////////// how will we get the current task's schedule if we dont currently have the taskId
+
+            for (const s of scheduledResults) {
+              await db.runAsync(
+                `INSERT INTO task_schedules
+     (taskId, date, start_minutes, end_minutes, duration)
+     VALUES (?, ?, ?, ?, ?)`,
+                [s.taskId, s.date, s.start, s.end, s.end - s.start]
+              );
+            }
+            await db.runAsync("COMMIT");
+          } catch (err) {
+            await db.runAsync("ROLLBACK");
+
+            Alert.alert(
+              "Scheduling failed",
+              err.message || "Could not reschedule task"
+            );
+          }
         }
 
-        const totalMinutes = selectedHours * 60 + selectedMinutes;
-        // 1. compute free slots from busyItems
-        // 2. allocate
-        // 3. DO NOT check conflicts manually
-        return Alert.alert(
-          "Auto Scheduling",
-          "Auto scheduling will be available soon."
-        );
+        navigation.goBack();
       } else {
         const now = new Date();
 
@@ -346,9 +562,9 @@ export default function EditTask() {
           return Alert.alert("Invalid Date", "Date cannot be in the past.");
         }
 
-        // Time validation (only if date is today)
+        // Time validation (only if date is today) ///////// better to compare with minutes
         if (startDate.getTime() === today.getTime()) {
-          if (startTime.getTime() <= now.getTime()) {
+          if (startMinutes <= now.getHours() * 60 + now.getMinutes()) {
             return Alert.alert(
               "Invalid Time",
               "Time must be later than the current time."
@@ -356,8 +572,8 @@ export default function EditTask() {
           }
         }
         /* ---------- MANUAL TASK ---------- */
-        let startM = startTime.getHours() * 60 + startTime.getMinutes();
-        let endM = endTime.getHours() * 60 + endTime.getMinutes();
+        let startM = startMinutes;
+        let endM = endMinutes;
         let selectedDate = date;
 
         if (startM === endM) {
@@ -374,8 +590,6 @@ export default function EditTask() {
           date: selectedDate,
           startM: startM,
           endM: endM,
-          skip:
-            mode === "edit" && item.type === "task" && item.id === existing?.id,
         });
 
         if (conflict) {
@@ -391,8 +605,8 @@ export default function EditTask() {
         if (mode === "add") {
           const res = await db.runAsync(
             `INSERT INTO tasks
-         (title, priority, is_auto, deadline, total_duration, duration_left, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               taskName.trim(),
               null,
@@ -400,7 +614,8 @@ export default function EditTask() {
               null,
               null,
               null,
-              new Date().toISOString(),
+              null,
+              new Date().toLocaleDateString(),
             ]
           );
           taskId = res.lastInsertRowId;
@@ -409,9 +624,9 @@ export default function EditTask() {
 
           await db.runAsync(
             `UPDATE tasks SET
-          title=?, priority=?, is_auto=?, deadline=?, total_duration=?, duration_left=?
+          title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
          WHERE id=?`,
-            [taskName.trim(), null, 0, null, null, null, taskId]
+            [taskName.trim(), null, 0, null, null, null, null, taskId]
           );
 
           await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
@@ -533,19 +748,6 @@ export default function EditTask() {
           />
         </View>
 
-        {/* MONTHLY TOGGLE */}
-        {/* <View style={styles.section}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleText}>Repeat Monthly</Text>
-            <Switch
-              value={isMonthly}
-              onValueChange={setIsMonthly}
-              trackColor={{ false: "#ccc", true: "#6C63FF" }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View> */}
-
         {/* AUTO-SCHEDULE TOGGLE */}
         <View style={styles.section}>
           <View style={styles.toggleRow}>
@@ -650,29 +852,27 @@ export default function EditTask() {
                 <TouchableOpacity
                   style={styles.timeCard}
                   onPress={() => {
-                    setActiveDatePicker("deadline");
+                    setActiveDatePicker("deadlineDate");
                     setShowDatePicker(true);
                   }}
                 >
                   <Text style={styles.timeSmall}>Date</Text>
-                  <Text style={styles.timeLarge}>{formatDate(deadline)}</Text>
+                  <Text style={styles.timeLarge}>
+                    {formatDate(deadlineDate)}
+                  </Text>
                 </TouchableOpacity>
 
                 {/* TIME PICKER */}
                 <TouchableOpacity
                   style={styles.timeCard}
                   onPress={() => {
-                    setActiveTimePicker("deadline");
+                    setActiveTimePicker("deadlineTime");
                     setShowTimePicker(true);
                   }}
                 >
                   <Text style={styles.timeSmall}>Time</Text>
                   <Text style={styles.timeLarge}>
-                    {deadline.toLocaleTimeString("en-IN", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {minutesToTimeAMPM(deadlineMinutes)}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -739,11 +939,7 @@ export default function EditTask() {
                 >
                   <Text style={styles.timeSmall}>Start</Text>
                   <Text style={styles.timeLarge}>
-                    {startTime.toLocaleTimeString("en-IN", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {minutesToTimeAMPM(startMinutes)}
                   </Text>
                 </TouchableOpacity>
 
@@ -757,11 +953,7 @@ export default function EditTask() {
                 >
                   <Text style={styles.timeSmall}>End</Text>
                   <Text style={styles.timeLarge}>
-                    {endTime.toLocaleTimeString("en-IN", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {minutesToTimeAMPM(endMinutes)}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -772,7 +964,7 @@ export default function EditTask() {
         {/* DATE PICKER MODAL */}
         {showDatePicker && (
           <DateTimePicker
-            value={activeDatePicker === "deadline" ? deadline : date}
+            value={activeDatePicker === "deadlineDate" ? deadlineDate : date}
             mode="date"
             display="spinner"
             onChange={onChangeDate}
@@ -783,10 +975,10 @@ export default function EditTask() {
           <DateTimePicker
             value={
               activeTimePicker === "start"
-                ? startTime
+                ? minutesToDate(startMinutes)
                 : activeTimePicker === "end"
-                ? endTime
-                : deadline
+                ? minutesToDate(endMinutes)
+                : minutesToDate(deadlineMinutes)
             }
             mode="time"
             display="spinner"

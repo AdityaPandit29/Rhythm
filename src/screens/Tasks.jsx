@@ -57,15 +57,13 @@ export default function Tasks() {
         if (!scheduleMap[row.taskId]) {
           scheduleMap[row.taskId] = {
             dates: [],
-            startTime: [],
-            endTime: [],
-            duration: [],
+            startMinutes: [],
+            endMinutes: [],
           };
         }
         scheduleMap[row.taskId].dates.push(row.date);
-        scheduleMap[row.taskId].startTime.push(row.start_time);
-        scheduleMap[row.taskId].endTime.push(row.end_time);
-        scheduleMap[row.taskId].duration.push(row.duration);
+        scheduleMap[row.taskId].startMinutes.push(row.start_minutes);
+        scheduleMap[row.taskId].endMinutes.push(row.end_minutes);
       }
 
       /* ---------- MERGE TASKS + SCHEDULES ---------- */
@@ -77,14 +75,14 @@ export default function Tasks() {
           name: t.title,
           priority: t.priority,
           isAuto: t.is_auto,
-          deadline: t.deadline,
+          deadlineDate: t.deadline_date,
+          deadlineMinutes: t.deadlineMinutes,
           createdAt: t.created_at,
 
           // Scheduling info
-          startTime: schedule?.startTime || [],
-          endTime: schedule?.endTime || [],
+          startMinutes: schedule?.startMinutes || [],
+          endMinutes: schedule?.endMinutes || [],
           scheduledDates: schedule?.dates || [],
-          duration: schedule?.duration || [],
 
           totalDuration: t.total_duration,
           durationLeft: t.duration_left,
@@ -129,11 +127,11 @@ export default function Tasks() {
             name={t.name}
             priority={t.priority}
             isAuto={t.isAuto}
-            deadline={t.deadline}
-            startTimes={t.startTime}
-            endTimes={t.endTime}
+            deadlineDate={t.deadlineDate}
+            deadlineMinutes={t.deadlineMinutes}
+            startMinutes={t.startMinutes}
+            endMinutes={t.endMinutes}
             scheduledDates={t.scheduledDates}
-            durations={t.duration}
             totalDuration={t.totalDuration}
             durationLeft={t.durationLeft}
             onDeleted={loadTasks}

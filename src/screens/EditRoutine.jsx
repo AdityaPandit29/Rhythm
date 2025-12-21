@@ -107,10 +107,12 @@ export default function EditRoutine() {
     }
   };
 
-  const groupBusyBlocks = (rows) => {
+  const groupBusyBlocks = (recurring, tasks) => {
     const grouped = {};
-    rows.forEach((row) => {
+
+    recurring.forEach((row) => {
       const key = `${row.type}-${row.itemId}`;
+
       if (!grouped[key]) {
         grouped[key] = {
           type: row.type,
@@ -121,7 +123,29 @@ export default function EditRoutine() {
           days: [],
         };
       }
-      if (row.day !== null) grouped[key].days.push(row.day);
+
+      if (!grouped[key].days.includes(row.day)) {
+        grouped[key].days.push(row.day);
+      }
+    });
+
+    tasks.forEach((row) => {
+      const key = `${row.type}-${row.itemId}`;
+
+      if (!grouped[key]) {
+        grouped[key] = {
+          type: row.type,
+          id: row.itemId,
+          title: row.title,
+          start_minutes: [],
+          end_minutes: [],
+          dates: [],
+        };
+      }
+
+      grouped[key].dates.push(row.date);
+      grouped[key].start_minutes.push(row.start_minutes);
+      grouped[key].end_minutes.push(row.end_minutes);
     });
 
     return Object.values(grouped);
@@ -138,17 +162,35 @@ export default function EditRoutine() {
         continue;
       }
 
-      const shareDay = item.days.some((dayIndex) => days[dayIndex]);
+      if (item.type === "task") {
+        for (let i = 0; i < item.dates.length; i++) {
+          const weekday = new Date(
+            item.dates[i].split("/").reverse().join("-")
+          ).getDay();
 
-      if (!shareDay) continue;
+          if (!days[weekday]) continue;
 
-      if (
-        intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-      ) {
-        return {
-          type: item.type,
-          title: item.title,
-        };
+          if (
+            intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+          ) {
+            return {
+              type: item.type,
+              title: item.title,
+            };
+          }
+        }
+      } else {
+        const shareDay = item.days.some((dayIndex) => days[dayIndex]);
+        if (!shareDay) continue;
+
+        if (
+          intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+        ) {
+          return {
+            type: item.type,
+            title: item.title,
+          };
+        }
       }
     }
     return null;
@@ -168,8 +210,8 @@ export default function EditRoutine() {
       const endM = endMinutes;
 
       // --- LOAD ALL BUSY BLOCKS ---
-      const blocks = await db.getAllAsync(`
-        SELECT  
+      const routinesAndHabits = await db.getAllAsync(`
+        SELECT 
           r.start_minutes AS start_minutes,
           r.end_minutes AS end_minutes,
           d.day AS day,
@@ -190,22 +232,22 @@ export default function EditRoutine() {
           h.title AS title
         FROM habits h
         LEFT JOIN habit_days hd ON h.id = hd.habitId
+      `);
 
-        UNION ALL
-
+      const manualTasks = await db.getAllAsync(`
         SELECT
           ts.start_minutes AS start_minutes,
           ts.end_minutes AS end_minutes,
-          CAST(strftime('%w', ts.date) AS INTEGER) AS day,
+          ts.date AS date,
           'task' AS type,
           t.id AS itemId,
           t.title AS title
         FROM task_schedules ts
-        JOIN tasks t ON ts.taskId = t.id
+        LEFT JOIN tasks t ON ts.taskId = t.id
         WHERE t.is_auto = 0;
       `);
 
-      const busyItems = groupBusyBlocks(blocks);
+      const busyItems = groupBusyBlocks(routinesAndHabits, manualTasks);
 
       // --- CHECK CONFLICT ---
 

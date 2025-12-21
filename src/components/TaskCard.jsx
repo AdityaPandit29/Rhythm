@@ -9,24 +9,52 @@ export default function TaskCard({
   name,
   priority,
   isAuto,
-  deadline,
-  startTimes,
-  endTimes,
+  deadlineDate,
+  deadlineMinutes,
+  startMinutes,
+  endMinutes,
   scheduledDates,
-  durations,
   totalDuration,
   durationLeft,
   onDeleted,
 }) {
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
+  function formatRelativeDate(dateString) {
+    // Parse Indian format "23/12/2025" → Date object
+    const [day, month, year] = dateString.split("/").map(Number);
+    const date = new Date(year, month - 1, day); // JS months 0-indexed
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+
+    // Today/Tomorrow/Yesterday
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays === -1) return "Yesterday";
+
+    // Short date format like "Jan 12, 2025"
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
   const navigation = useNavigation();
   const db = useSQLiteContext();
-  const deadlineDate = new Date(deadline);
-  const startTime = new Date(startTimes[0]);
-  const endTime = new Date(endTimes[0]);
 
   const priorityColors = {
     High: "#FF5555",
-    Medium: "#F7B801",
     Low: "#4CAF50",
   };
 
@@ -111,10 +139,12 @@ export default function TaskCard({
                 taskName: name,
                 priority: priority,
                 isAuto: isAuto,
-                deadline: deadlineDate,
+                deadlineDate: deadlineDate,
+                deadlineMinutes: deadlineMinutes,
+                scheduledDate: scheduledDates[0],
                 durationLeft: durationLeft, // used for selected Hours and Minutes
-                startTime: startTime,
-                endTime: endTime,
+                startMinutes: startMinutes[0],
+                endMinutes: endMinutes[0],
               },
             })
           }
@@ -130,48 +160,47 @@ export default function TaskCard({
       {/* TITLE */}
       <Text style={styles.title}>{name}</Text>
 
-      {/* META ROW: PRIORITY + TYPE */}
-      <View style={styles.metaRow}>
-        <View style={styles.priorityRow}>
-          <View
-            style={[
-              styles.priorityDot,
-              { backgroundColor: priorityColors[priority] },
-            ]}
-          />
-          <Text style={styles.priorityText}>{priority} Priority</Text>
-        </View>
+      {isAuto === 1 && (
+        <>
+          {/* META ROW: PRIORITY + TYPE */}
+          <View style={styles.metaRow}>
+            <View style={styles.priorityRow}>
+              <View
+                style={[
+                  styles.priorityDot,
+                  { backgroundColor: priorityColors[priority] },
+                ]}
+              />
+              <Text style={styles.priorityText}>{priority} Priority</Text>
+            </View>
 
-        {isAuto === 1 && <Text style={styles.monthlyBadge}>Auto</Text>}
-        {totalDuration && totalDuration === 0 && (
-          <Text style={styles.monthlyBadge}>Quick</Text>
-        )}
-      </View>
+            {isAuto === 1 && <Text style={styles.monthlyBadge}>Auto</Text>}
+            {totalDuration && totalDuration === 0 && (
+              <Text style={styles.monthlyBadge}>Quick</Text>
+            )}
+          </View>
 
-      {/* DEADLINE */}
-      <Text style={styles.subText}>
-        Due : {`${formatRelativeDeadline(deadlineDate)}`}
-      </Text>
+          {/* DEADLINE */}
+          <Text style={styles.subText}>
+            Due : {`${formatRelativeDeadline(deadlineDate)}`}
+          </Text>
+        </>
+      )}
 
       {/* SCHEDULE AND DURATION */}
       <Text style={styles.schedule}>
-        Scheduled :{" "}
-        {startTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}{" "}
-        -{" "}
-        {endTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}
+        {formatRelativeDate(scheduledDates[0])}
+      </Text>
+      <Text style={styles.schedule}>
+        {minutesToTimeAMPM(startMinutes[0])} -{" "}
+        {minutesToTimeAMPM(endMinutes[0])}
       </Text>
       {isAuto === 1 && (
         <View style={styles.durationRow}>
           <Entypo name="stopwatch" size={16} color="#555" />
-          <Text style={styles.durationText}>Duration: {durations[0]}</Text>
+          <Text style={styles.durationText}>
+            Duration: {endMinutes[0] - startMinutes[0]}
+          </Text>
         </View>
       )}
 
