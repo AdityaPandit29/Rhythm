@@ -63,7 +63,7 @@ export default function EditTask() {
   const [isAuto, setIsAuto] = useState((existing?.isAuto ?? 1) === 1); // false
   const [deadlineDate, setDeadlineDate] = useState(
     existing?.deadlineDate
-      ? new Date(existing.deadlineDate.split("/").reverse().join("-"))
+      ? new Date(existing.deadlineDate)
       : new Date(new Date().setHours(0, 0, 0, 0))
   );
 
@@ -75,7 +75,7 @@ export default function EditTask() {
 
   const [date, setDate] = useState(
     existing?.scheduledDate
-      ? new Date(existing.scheduledDate.split("/").reverse().join("-"))
+      ? new Date(existing.scheduledDate)
       : new Date(new Date().setHours(0, 0, 0, 0))
   );
 
@@ -177,7 +177,7 @@ export default function EditTask() {
   };
 
   const findConflict = ({ items, date, startM, endM }) => {
-    const dateString = date.toLocaleDateString().split("T")[0];
+    const dateString = date.toLocaleDateString("sv-SE");
     const day = date.getDay();
 
     for (let item of items) {
@@ -342,13 +342,13 @@ export default function EditTask() {
           if (mode === "add") {
             await db.runAsync(
               `INSERT INTO tasks
-     (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 taskName.trim(),
                 null,
                 1,
-                deadlineDate.toLocaleDateString().split("T")[0],
+                deadlineDate.toLocaleDateString("sv-SE"),
                 deadlineMinutes,
                 0,
                 null,
@@ -358,15 +358,19 @@ export default function EditTask() {
           } else {
             const taskId = existing.id;
 
+            await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [
+              taskId,
+            ]);
+
             await db.runAsync(
               `UPDATE tasks SET
-          title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
-         WHERE id=?`,
+                title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
+              WHERE id=?`,
               [
                 taskName.trim(),
                 null,
                 1,
-                deadlineDate.toLocaleDateString().split("T")[0],
+                deadlineDate.toLocaleDateString("sv-SE"),
                 deadlineMinutes,
                 0,
                 null,
@@ -448,14 +452,14 @@ export default function EditTask() {
             if (fixedIds.length) {
               fixedSchedulesRow = await db.getAllAsync(
                 `SELECT ts.start_minutes AS start_minutes,
-            ts.end_minutes AS end_minutes,
-            ts.date AS date,
-            'task' AS type,
-            t.id AS itemId,
-            t.title AS title
-          FROM task_schedules ts
-          JOIN tasks t ON ts.taskId = t.id
-          WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
+                  ts.end_minutes AS end_minutes,
+                  ts.date AS date,
+                  'task' AS type,
+                  t.id AS itemId,
+                  t.title AS title
+                FROM task_schedules ts
+                JOIN tasks t ON ts.taskId = t.id
+                WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
                 fixedIds
               );
             }
@@ -500,7 +504,7 @@ export default function EditTask() {
                 [
                   taskName.trim(),
                   priority,
-                  deadlineDate.toLocaleDateString().split("T")[0],
+                  deadlineDate.toLocaleDateString("sv-SE"),
                   deadlineMinutes,
                   totalMinutes,
                   totalMinutes,
@@ -515,7 +519,7 @@ export default function EditTask() {
                 [
                   taskName.trim(),
                   priority,
-                  deadlineDate.toLocaleDateString().split("T")[0],
+                  deadlineDate.toLocaleDateString("sv-SE"),
                   deadlineMinutes,
                   totalMinutes,
                   totalMinutes,
@@ -615,7 +619,7 @@ export default function EditTask() {
               null,
               null,
               null,
-              new Date().toLocaleDateString(),
+              new Date().toISOString(),
             ]
           );
           taskId = res.lastInsertRowId;
@@ -642,7 +646,7 @@ export default function EditTask() {
           VALUES (?, ?, ?, ?, ?)`,
             [
               taskId,
-              selectedDate.toLocaleDateString().split("T")[0],
+              selectedDate.toLocaleDateString("sv-SE"),
               startM,
               1440,
               1440 - startM,
@@ -656,7 +660,7 @@ export default function EditTask() {
             `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
           VALUES (?, ?, ?, ?, ?)`,
-            [taskId, nextDate.toLocaleDateString().split("T")[0], 0, endM, endM]
+            [taskId, nextDate.toLocaleDateString("sv-SE"), 0, endM, endM]
           );
         } else {
           await db.runAsync(
@@ -665,7 +669,7 @@ export default function EditTask() {
           VALUES (?, ?, ?, ?, ?)`,
             [
               taskId,
-              selectedDate.toLocaleDateString().split("T")[0],
+              selectedDate.toLocaleDateString("sv-SE"),
               startM,
               endM,
               endM - startM,

@@ -169,9 +169,7 @@ export default function EditHabit() {
 
       if (item.type === "task") {
         for (let i = 0; i < item.dates.length; i++) {
-          const weekday = new Date(
-            item.dates[i].split("/").reverse().join("-")
-          ).getDay();
+          const weekday = new Date(item.dates[i]).getDay();
 
           if (!days[weekday]) continue;
 

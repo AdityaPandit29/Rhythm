@@ -44,7 +44,7 @@ export default function Routines() {
         name: r.title,
         startMinutes: r.start_minutes,
         endMinutes: r.end_minutes,
-        daysSelected: dayMap[r.id] || [], // e.g. ["Mon","Wed"]
+        daysSelected: dayMap[r.id] || [], // e.g. [1,3]
       }));
 
       setRoutines(finalList);
@@ -78,19 +78,6 @@ export default function Routines() {
           <Text style={styles.addRoutineText}>Add Routine</Text>
         </TouchableOpacity>
 
-        {/* <RoutineCard
-          name="Office"
-          startTime="8:00 AM"
-          endTime="5:00 PM"
-          daysSelected={[true, true, true, true, true, false, false]}
-        />
-        <RoutineCard
-          name="Gym"
-          startTime="6:00 PM"
-          endTime="7:00 PM"
-          daysSelected={[false, false, false, false, false, true, true]}
-        /> */}
-
         {/* Render routines from DB */}
         {routines.map((r) => (
           <RoutineCard
@@ -99,7 +86,7 @@ export default function Routines() {
             name={r.name}
             startMinutes={r.startMinutes}
             endMinutes={r.endMinutes}
-            daysSelected={r.daysSelected} // ["Mon","Wed"]
+            daysSelected={r.daysSelected}
             onDeleted={loadRoutines}
           />
         ))}

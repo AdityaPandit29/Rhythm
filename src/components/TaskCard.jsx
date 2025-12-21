@@ -30,8 +30,7 @@ export default function TaskCard({
 
   function formatRelativeDate(dateString) {
     // Parse Indian format "23/12/2025" → Date object
-    const [day, month, year] = dateString.split("/").map(Number);
-    const date = new Date(year, month - 1, day); // JS months 0-indexed
+    const date = new Date(dateString); // JS months 0-indexed
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -58,10 +57,12 @@ export default function TaskCard({
     Low: "#4CAF50",
   };
 
-  const formatRelativeDeadline = (isoDate) => {
-    if (!isoDate) return "";
+  const formatRelativeDeadline = (svSeDate) => {
+    if (!svSeDate) return "";
 
-    const date = new Date(isoDate);
+    // Parse YYYY-MM-DD → Date (today's date at midnight)
+    const [year, month, day] = svSeDate.split("-").map(Number);
+    const date = new Date(year, month - 1, day); // JS months 0-indexed
 
     // Normalize dates (ignore time)
     const today = new Date();
@@ -88,13 +89,15 @@ export default function TaskCard({
       });
     }
 
-    const time = date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    // Add time if available (from separate minutes field)
+    // Pass deadlineMinutes as second param, or fetch from DB
+    const time = "time" ? minutesToTimeAMPM(deadlineMinutes) : "";
 
-    return `${dayLabel} at ${time}`;
+    if (time) {
+      return `${dayLabel} at ${time}`;
+    }
+
+    return dayLabel;
   };
 
   const handleDelete = () => {
