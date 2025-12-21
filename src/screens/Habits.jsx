@@ -32,7 +32,7 @@ export default function Habits() {
         SELECT habitId, day FROM habit_days;
       `);
 
-      // Convert days to a structure like: { 1: ["Mon","Tue"], 2:["Sat"], ... }
+      // Convert days to a structure like: { 1: [0,1], 2:[5], ... }
       const dayMap = {};
       for (let row of daysRows) {
         if (!dayMap[row.habitId]) dayMap[row.habitId] = [];
@@ -43,11 +43,11 @@ export default function Habits() {
       const finalList = habitRows.map((h) => ({
         id: h.id,
         name: h.title,
-        startTime: h.start_time,
-        endTime: h.end_time,
+        startMinutes: h.start_minutes,
+        endMinutes: h.end_minutes,
         bestStreak: h.best_streak,
         currentStreak: h.current_streak,
-        daysSelected: dayMap[h.id] || [], // e.g. ["Mon","Wed"]
+        daysSelected: dayMap[h.id] || [], // e.g. [1,3]
       }));
 
       setHabits(finalList);
@@ -87,11 +87,11 @@ export default function Habits() {
             key={h.id}
             id={h.id}
             name={h.name}
-            startTime={new Date(h.startTime)}
-            endTime={new Date(h.endTime)}
+            startMinutes={h.startMinutes}
+            endMinutes={h.endMinutes}
             bestStreak={h.bestStreak}
             currentStreak={h.currentStreak}
-            daysSelected={h.daysSelected} // ["Mon","Wed"]
+            daysSelected={h.daysSelected} // [0,1,...]
             onDeleted={loadHabits}
           />
         ))}

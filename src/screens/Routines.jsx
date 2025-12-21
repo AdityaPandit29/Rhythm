@@ -31,7 +31,7 @@ export default function Routines() {
         SELECT routineId, day FROM routine_days;
       `);
 
-      // Convert days to a structure like: { 1: ["Mon","Tue"], 2:["Sat"], ... }
+      // Convert days to a structure like: { 1: [0,1], 2:[5], ... }
       const dayMap = {};
       for (let row of daysRows) {
         if (!dayMap[row.routineId]) dayMap[row.routineId] = [];
@@ -42,8 +42,8 @@ export default function Routines() {
       const finalList = routineRows.map((r) => ({
         id: r.id,
         name: r.title,
-        startTime: r.start_time,
-        endTime: r.end_time,
+        startMinutes: r.start_minutes,
+        endMinutes: r.end_minutes,
         daysSelected: dayMap[r.id] || [], // e.g. ["Mon","Wed"]
       }));
 
@@ -97,8 +97,8 @@ export default function Routines() {
             key={r.id}
             id={r.id}
             name={r.name}
-            startTime={new Date(r.startTime)}
-            endTime={new Date(r.endTime)}
+            startMinutes={r.startMinutes}
+            endMinutes={r.endMinutes}
             daysSelected={r.daysSelected} // ["Mon","Wed"]
             onDeleted={loadRoutines}
           />

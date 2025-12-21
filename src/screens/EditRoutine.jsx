@@ -31,19 +31,41 @@ export default function EditRoutine() {
 
   // State
   const [label, setLabel] = useState(existing.label ?? "");
-  const [startTime, setStartTime] = useState(
-    existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
+
+  const [startMinutes, setStartMinutes] = useState(
+    existing?.startMinutes ?? 540
   );
-  const [endTime, setEndTime] = useState(
-    existing.endTime ?? new Date(new Date().setHours(17, 0, 0, 0))
-  );
+  const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1020);
   const [activePicker, setActivePicker] = useState(null); // "start" or "end"
   const [showTimePicker, setShowTimePicker] = useState(false);
   // days: array of booleans [Mon..Sun]
   const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
 
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
+  function minutesToDate(minutes) {
+    const now = new Date();
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0
+    );
+    date.setMinutes(minutes);
+    return date;
+  }
+
   const toggleDay = (index) => {
-    // const i = (index + 1) % 7;
     const copy = [...days];
     copy[index] = !copy[index];
     setDays(copy);
@@ -53,10 +75,12 @@ export default function EditRoutine() {
     setShowTimePicker(false);
     if (!selectedTime) return;
 
+    const minutes = selectedTime.getHours() * 60 + selectedTime.getMinutes();
+
     if (activePicker === "start") {
-      setStartTime(selectedTime);
+      setStartMinutes(minutes);
     } else {
-      setEndTime(selectedTime);
+      setEndMinutes(minutes);
     }
   };
 
@@ -97,7 +121,7 @@ export default function EditRoutine() {
           days: [],
         };
       }
-      if (row.day) grouped[key].days.push(row.day);
+      if (row.day !== null) grouped[key].days.push(row.day);
     });
 
     return Object.values(grouped);
@@ -140,8 +164,8 @@ export default function EditRoutine() {
         return Alert.alert("Missing Days", "Please select at least one day.");
       }
 
-      const startM = startTime.getHours() * 60 + startTime.getMinutes();
-      const endM = endTime.getHours() * 60 + endTime.getMinutes();
+      const startM = startMinutes;
+      const endM = endMinutes;
 
       // --- LOAD ALL BUSY BLOCKS ---
       const blocks = await db.getAllAsync(`
@@ -189,7 +213,7 @@ export default function EditRoutine() {
       if (conflict) {
         return Alert.alert(
           "Time Conflict",
-          `This habit overlaps with ${conflict.type}: "${conflict.title}".`
+          `This routine overlaps with ${conflict.type}: "${conflict.title}".`
         );
       }
 
@@ -197,15 +221,9 @@ export default function EditRoutine() {
       if (mode === "add") {
         const result = await db.runAsync(
           `INSERT INTO routines 
-        (title, start_time, end_time, start_minutes, end_minutes)
-       VALUES (?, ?, ?, ?, ?);`,
-          [
-            label.trim(),
-            startTime.toISOString(),
-            endTime.toISOString(),
-            startM,
-            endM,
-          ]
+        (title, start_minutes, end_minutes)
+       VALUES (?, ?, ?);`,
+          [label.trim(), startM, endM]
         );
         const newId = result.lastInsertRowId;
 
@@ -227,16 +245,9 @@ export default function EditRoutine() {
         if (!existing?.id) throw new Error("Missing routine id for update.");
         await db.runAsync(
           `UPDATE routines SET 
-        title=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+        title=?, start_minutes=?, end_minutes=?
        WHERE id=?`,
-          [
-            label.trim(),
-            startTime.toISOString(),
-            endTime.toISOString(),
-            startM,
-            endM,
-            existing.id,
-          ]
+          [label.trim(), startM, endM, existing.id]
         );
 
         // delete old days
@@ -312,11 +323,7 @@ export default function EditRoutine() {
             >
               <Text style={styles.timeSmall}>Start</Text>
               <Text style={styles.timeLarge}>
-                {startTime.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {minutesToTimeAMPM(startMinutes)}
               </Text>
             </TouchableOpacity>
 
@@ -330,11 +337,7 @@ export default function EditRoutine() {
             >
               <Text style={styles.timeSmall}>End</Text>
               <Text style={styles.timeLarge}>
-                {endTime.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {minutesToTimeAMPM(endMinutes)}
               </Text>
             </TouchableOpacity>
           </View>
@@ -342,7 +345,11 @@ export default function EditRoutine() {
 
         {showTimePicker && (
           <DateTimePicker
-            value={activePicker === "start" ? startTime : endTime}
+            value={
+              activePicker === "start"
+                ? minutesToDate(startMinutes)
+                : minutesToDate(endMinutes)
+            }
             mode="time"
             display="spinner"
             onChange={onChangeTime}

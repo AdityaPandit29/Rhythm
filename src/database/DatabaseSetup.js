@@ -10,8 +10,6 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS routines (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
-          start_time TEXT,
-          end_time TEXT,
           start_minutes INTEGER,
           end_minutes INTEGER
         );
@@ -27,8 +25,6 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS habits (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
-          start_time TEXT,       
-          end_time TEXT,           
           start_minutes INTEGER,    
           end_minutes INTEGER,      
           current_streak INTEGER DEFAULT 0,
@@ -45,35 +41,39 @@ export default function DatabaseSetup() {
         CREATE TABLE IF NOT EXISTS tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
-          priority TEXT CHECK (priority IN ('High','Medium','Low')) DEFAULT 'Medium',
-          is_auto INTEGER DEFAULT 1,    
-          deadline TEXT,                     
-          total_duration INTEGER,             -- minutes (required if is_auto = 1)
-          duration_left INTEGER,         -- minutes (ONLY for auto tasks)
+
+          -- Only meaningful for AUTO tasks
+          priority TEXT CHECK (priority IN ('High','Low')) DEFAULT 'Low',
+          deadline TEXT,
+          total_duration INTEGER,
+          duration_left INTEGER,
+
+          -- Task mode
+          is_auto INTEGER NOT NULL, -- 1 = auto, 0 = manual
+
           created_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS task_schedules (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           taskId INTEGER NOT NULL,
-          date TEXT NOT NULL,             -- YYYY-MM-DD (scheduled day)
-          start_time TEXT,
-          end_time TEXT,
-          start_minutes INTEGER,
-          end_minutes INTEGER,
-          duration INTEGER,               -- working minutes THIS day
+
+          date TEXT NOT NULL,        -- YYYY-MM-DD
+          start_minutes INTEGER NOT NULL,
+          end_minutes INTEGER NOT NULL,
+          duration INTEGER NOT NULL,
+
           FOREIGN KEY (taskId)
           REFERENCES tasks(id)
           ON DELETE CASCADE
-        );
-
+        );        
       `);
 
-      const schema = await db.getAllAsync(`
-        SELECT sql FROM sqlite_master 
-        WHERE type='table' AND name='habits';
-      `);
-      console.log(schema);
+      // const res = await db.getAllAsync(`
+      //   SELECT * FROM routines;
+      // `);
+
+      // console.log(res);
     };
 
     createTables();

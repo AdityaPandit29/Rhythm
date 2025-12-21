@@ -33,8 +33,8 @@ export default function Tasks() {
       SELECT 
         taskId,
         date,
-        start_time,
-        end_time,
+        start_minutes,
+        end_minutes,
         duration
       FROM task_schedules
       ORDER BY date ASC;

@@ -30,18 +30,35 @@ export default function EditTask() {
 
   const priorityColors = {
     High: "#FF5555",
-    Medium: "#F7B801",
     Low: "#4CAF50",
   };
 
+  function minutesToDate(minutes) {
+    const now = new Date();
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0
+    );
+    date.setMinutes(minutes);
+    return date;
+  }
+
   /* ------------------------- STATES ------------------------- */
   const [taskName, setTaskName] = useState(existing.taskName ?? "");
-  // const [isMonthly, setIsMonthly] = useState(existing.isMonthly ?? false);
-  const [priority, setPriority] = useState(existing.priority ?? "Medium");
-  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 1);
+  const [priority, setPriority] = useState(existing.priority ?? "Low");
+  const [isAuto, setIsAuto] = useState((existing.isAuto ?? 1) === 0); // false
   const [deadline, setDeadline] = useState(
     existing.deadline ?? new Date(new Date().setHours(23, 59, 0, 0))
   );
+
+  const [date, setDate] = useState(
+    existing.date ?? new Date(new Date().setHours(0, 0, 0, 0))
+  );
+  // console.log(date);
 
   const duration = existing?.durationLeft ?? 0;
 
@@ -50,13 +67,18 @@ export default function EditTask() {
   const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
 
   const [startTime, setStartTime] = useState(
-    existing.startTime ?? new Date(new Date().setHours(9, 0, 0, 0))
+    existing?.start_minutes
+      ? minutesToDate(existing.start_minutes)
+      : minutesToDate(540)
   );
   const [endTime, setEndTime] = useState(
-    existing.endTime ?? new Date(new Date().setHours(10, 0, 0, 0))
+    existing?.end_minutes
+      ? minutesToDate(existing.end_minutes)
+      : minutesToDate(600)
   );
 
-  const [activePicker, setActivePicker] = useState(null); // "start" or "end"
+  const [activeTimePicker, setActiveTimePicker] = useState(null);
+  const [activeDatePicker, setActiveDatePicker] = useState(null);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -66,18 +88,24 @@ export default function EditTask() {
 
   /* ------------------------- FUNCTIONS ------------------------- */
 
-  const onChangeDeadlineDate = (event, selectedDate) => {
+  const onChangeDate = (event, selectedDate) => {
     setShowDatePicker(false);
-    if (selectedDate) {
+    if (activeDatePicker === "deadline") {
       const updated = new Date(deadline);
       updated.setFullYear(selectedDate.getFullYear());
       updated.setMonth(selectedDate.getMonth());
       updated.setDate(selectedDate.getDate());
       setDeadline(updated);
+    } else {
+      const updated = new Date(date);
+      updated.setFullYear(selectedDate.getFullYear());
+      updated.setMonth(selectedDate.getMonth());
+      updated.setDate(selectedDate.getDate());
+      setDate(updated);
     }
   };
 
-  const formatDeadlineDate = (date) => {
+  const formatDate = (date) => {
     const currentYear = new Date().getFullYear();
     const selectedYear = date.getFullYear();
 
@@ -101,9 +129,9 @@ export default function EditTask() {
     setShowTimePicker(false);
     if (!selectedTime) return;
 
-    if (activePicker === "start") {
+    if (activeTimePicker === "start") {
       setStartTime(selectedTime);
-    } else if (activePicker === "end") {
+    } else if (activeTimePicker === "end") {
       setEndTime(selectedTime);
     } else {
       const updated = new Date(deadline);
@@ -136,31 +164,46 @@ export default function EditTask() {
     }
   };
 
-  const findConflict = ({
-    items,
-    selectedDays, // boolean[7] (0 = Sun)
-    startM,
-    endM,
-    skip = null,
-  }) => {
+  const findConflict = ({ items, date, startM, endM, skip = null }) => {
+    const dateString = date.toISOString().split("T")[0];
+    const day = date.getDay();
+
     for (let item of items) {
       if (skip && item.type === skip.type && item.id === skip.id) continue;
 
-      /* ---------- DAY CHECK ---------- */
-      const dayOverlap = item.days.some((dayIndex) => selectedDays[dayIndex]);
-
-      if (!dayOverlap) continue;
-
-      /* ---------- TIME CHECK ---------- */
-      if (
-        intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-      ) {
-        return {
-          type: item.type,
-          title: item.title,
-        };
+      // ---------- DAY / DATE CHECK ----------
+      if (item.type === "task") {
+        for (let i = 0; i < item.dates.length; i++) {
+          if (item.dates[i] === dateString) {
+            if (
+              intervalsOverlap(
+                startM,
+                endM,
+                item.start_minutes[i],
+                item.end_minutes[i]
+              )
+            ) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
+          }
+        }
+      } else {
+        if (item.days.includes(day)) {
+          if (
+            intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+          ) {
+            return {
+              type: item.type,
+              title: item.title,
+            };
+          }
+        }
       }
     }
+
     return null;
   };
 
@@ -171,20 +214,36 @@ export default function EditTask() {
       const key = `${row.type}-${row.itemId}`;
 
       if (!grouped[key]) {
-        grouped[key] = {
-          type: row.type,
-          id: row.itemId,
-          title: row.title,
-          start_minutes: row.start_minutes,
-          end_minutes: row.end_minutes,
-          days: [],
-        };
+        if (row.type === "task") {
+          grouped[key] = {
+            type: row.type,
+            id: row.itemId,
+            title: row.title,
+            start_minutes: [],
+            end_minutes: [],
+            dates: [],
+          };
+        } else {
+          grouped[key] = {
+            type: row.type,
+            id: row.itemId,
+            title: row.title,
+            start_minutes: row.start_minutes,
+            end_minutes: row.end_minutes,
+            days: [],
+          };
+        }
       }
 
-      if (row.day !== null && row.day !== undefined) {
+      if (row.day !== undefined && row.day !== null) {
         if (!grouped[key].days.includes(row.day)) {
           grouped[key].days.push(row.day);
         }
+      }
+      if (row.date) {
+        grouped[key].dates.push(row.date);
+        grouped[key].start_minutes.push(row.start_minutes);
+        grouped[key].end_minutes.push(row.end_minutes);
       }
     });
 
@@ -197,45 +256,6 @@ export default function EditTask() {
       if (!taskName.trim()) {
         return Alert.alert("Missing Title", "Please enter a task title.");
       }
-
-      /* ---------- DEADLINE VALIDATION ---------- */
-      const deadlineDate = new Date(deadline);
-
-      // Deadline date is before today (ignore time)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const deadlineDay = new Date(deadlineDate);
-      deadlineDay.setHours(0, 0, 0, 0);
-
-      if (deadlineDay < today) {
-        return Alert.alert(
-          "Invalid Deadline",
-          "Deadline cannot be in the past."
-        );
-      }
-
-      /* ---------- MANUAL TASK TIME CHECK ---------- */
-      if (!isAuto && deadlineDay.getTime() === today.getTime()) {
-        const now = new Date();
-        const end = new Date(endTime);
-
-        if (end <= now) {
-          return Alert.alert(
-            "Invalid End Time",
-            "End time must be later than the current time."
-          );
-        }
-      }
-
-      const totalMinutes = selectedHours * 60 + selectedMinutes;
-      console.log(totalMinutes);
-      console.log(isAuto);
-
-      let startM = null;
-      let endM = null;
-      let finalStart = null;
-      let finalEnd = null;
 
       /* ---------- LOAD ALL BLOCKS ---------- */
       const blocks = await db.getAllAsync(`
@@ -266,7 +286,7 @@ export default function EditTask() {
         SELECT
           ts.start_minutes AS start_minutes,
           ts.end_minutes AS end_minutes,
-          CAST(strftime('%w', ts.date) AS INTEGER) AS day,
+          ts.date AS date,
           'task' AS type,
           t.id AS itemId,
           t.title AS title
@@ -280,9 +300,29 @@ export default function EditTask() {
 
       /* ---------- AUTO TASK ---------- */
 
-      if (isAuto && totalMinutes === 0) {
-        // quick task → skip scheduling, BUT DO NOT RETURN
-      } else if (isAuto) {
+      if (isAuto) {
+        if (totalMinutes === 0) {
+          // quick task → skip scheduling, BUT DO NOT RETURN
+        }
+
+        /* ---------- DEADLINE VALIDATION ---------- */
+        const deadlineDate = new Date(deadline);
+
+        // Deadline date is before today (ignore time)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const deadlineDay = new Date(deadlineDate);
+        deadlineDay.setHours(0, 0, 0, 0);
+
+        if (deadlineDay < today) {
+          return Alert.alert(
+            "Invalid Deadline",
+            "Deadline cannot be in the past."
+          );
+        }
+
+        const totalMinutes = selectedHours * 60 + selectedMinutes;
         // 1. compute free slots from busyItems
         // 2. allocate
         // 3. DO NOT check conflicts manually
@@ -291,64 +331,51 @@ export default function EditTask() {
           "Auto scheduling will be available soon."
         );
       } else {
+        const now = new Date();
+
+        // Today at 00:00
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Selected date at 00:00
+        const startDate = new Date(date);
+        startDate.setHours(0, 0, 0, 0);
+
+        // Date validation
+        if (startDate < today) {
+          return Alert.alert("Invalid Date", "Date cannot be in the past.");
+        }
+
+        // Time validation (only if date is today)
+        if (startDate.getTime() === today.getTime()) {
+          if (startTime.getTime() <= now.getTime()) {
+            return Alert.alert(
+              "Invalid Time",
+              "Time must be later than the current time."
+            );
+          }
+        }
         /* ---------- MANUAL TASK ---------- */
-        startM = startTime.getHours() * 60 + startTime.getMinutes();
-        endM = endTime.getHours() * 60 + endTime.getMinutes();
+        let startM = startTime.getHours() * 60 + startTime.getMinutes();
+        let endM = endTime.getHours() * 60 + endTime.getMinutes();
+        let selectedDate = date;
 
-        const duration = (endM - startM + 1440) % 1440;
-
-        if (duration === 0) {
+        if (startM === endM) {
           return Alert.alert(
             "Invalid Time",
             "End time must be differ from start time."
           );
         }
 
-        finalStart = startTime;
-        finalEnd = endTime;
-
         /* ---------- CHECK CONFLICT ---------- */
-
-        // index: 0 = Sun ... 6 = Sat
-        const now = new Date();
-
-        let startDate = new Date();
-        let endDate = new Date(deadline);
-
-        startDate.setHours(
-          finalStart.getHours(),
-          finalStart.getMinutes(),
-          0,
-          0
-        );
-
-        endDate.setHours(finalEnd.getHours(), finalEnd.getMinutes(), 0, 0);
-
-        // if today's slot already passed → start tomorrow
-        if (startDate <= now) {
-          startDate.setDate(startDate.getDate() + 1);
-        }
-
-        // if the time slot is after the deadline then end one day before
-        if (endDate > deadline) {
-          endDate.setDate(endDate.getDate() - 1);
-        }
-        const selectedDays = Array(7).fill(false);
-
-        for (
-          let d = new Date(startDate);
-          d <= endDate;
-          d.setDate(d.getDate() + 1)
-        ) {
-          selectedDays[d.getDay()] = true;
-        }
 
         const conflict = findConflict({
           items: busyItems,
-          selectedDays, // derived from date range or weekday
-          startM,
-          endM,
-          skip: mode === "edit" ? { type: "task", id: existing.id } : null,
+          date: selectedDate,
+          startM: startM,
+          endM: endM,
+          skip:
+            mode === "edit" && item.type === "task" && item.id === existing?.id,
         });
 
         if (conflict) {
@@ -368,9 +395,9 @@ export default function EditTask() {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
               taskName.trim(),
-              priority,
+              null,
               0,
-              deadline?.toISOString(),
+              null,
               null,
               null,
               new Date().toISOString(),
@@ -384,15 +411,7 @@ export default function EditTask() {
             `UPDATE tasks SET
           title=?, priority=?, is_auto=?, deadline=?, total_duration=?, duration_left=?
          WHERE id=?`,
-            [
-              taskName.trim(),
-              priority,
-              0,
-              deadline?.toISOString(),
-              null,
-              null,
-              taskId,
-            ]
+            [taskName.trim(), null, 0, null, null, null, taskId]
           );
 
           await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
@@ -401,22 +420,40 @@ export default function EditTask() {
         }
 
         /* ---------- INSERT MANUAL SCHEDULES ---------- */
-        for (
-          let d = new Date(startDate);
-          d <= endDate;
-          d.setDate(d.getDate() + 1)
-        ) {
+        if (endM <= startM) {
           await db.runAsync(
             `INSERT INTO task_schedules
-          (taskId, date, start_time, end_time, start_minutes, end_minutes)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+          (taskId, date, start_minutes, end_minutes, duration)
+          VALUES (?, ?, ?, ?, ?)`,
             [
               taskId,
-              d.toISOString().split("T")[0],
-              finalStart.toISOString(),
-              finalEnd.toISOString(),
+              selectedDate.toLocaleDateString().split("T")[0],
+              startM,
+              1440,
+              1440 - startM,
+            ]
+          );
+
+          const nextDate = new Date(selectedDate);
+          nextDate.setDate(nextDate.getDate() + 1);
+
+          await db.runAsync(
+            `INSERT INTO task_schedules
+          (taskId, date, start_minutes, end_minutes, duration)
+          VALUES (?, ?, ?, ?, ?)`,
+            [taskId, nextDate.toLocaleDateString().split("T")[0], 0, endM, endM]
+          );
+        } else {
+          await db.runAsync(
+            `INSERT INTO task_schedules
+          (taskId, date, start_minutes, end_minutes, duration)
+          VALUES (?, ?, ?, ?, ?)`,
+            [
+              taskId,
+              selectedDate.toLocaleDateString().split("T")[0],
               startM,
               endM,
+              endM - startM,
             ]
           );
         }
@@ -424,7 +461,7 @@ export default function EditTask() {
 
       navigation.goBack();
     } catch (err) {
-      console.error("validateAndSave (habit) error:", err);
+      console.error("validateAndSave (task) error:", err);
       Alert.alert(
         "Save Failed",
         err?.message || "Something went wrong while saving the habit."
@@ -509,36 +546,77 @@ export default function EditTask() {
           </View>
         </View> */}
 
-        {/* PRIORITY */}
+        {/* AUTO-SCHEDULE TOGGLE */}
         <View style={styles.section}>
-          <Text style={styles.label}>Priority</Text>
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleText}>
+              Auto-schedule the best time for this task
+            </Text>
+            <Switch
+              value={isAuto}
+              onValueChange={setIsAuto}
+              trackColor={{ false: "#ccc", true: "#6C63FF" }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
 
-          <View style={styles.typeRow}>
-            {/* LOW */}
-            <Pressable
-              style={[
-                styles.typeOption,
-                priority === "Low" && { backgroundColor: "#6C63FF" },
-              ]}
-              onPress={() => setPriority("Low")}
-            >
-              <View
-                style={[
-                  styles.priorityDot,
-                  { backgroundColor: priorityColors["Low"] },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.typeText,
-                  priority === "Low" && { color: "white" },
-                ]}
-              >
-                Low
-              </Text>
-            </Pressable>
+        {isAuto ? (
+          <>
+            {/* PRIORITY */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Priority</Text>
 
-            {/* MEDIUM */}
+              <View style={styles.typeRow}>
+                {/* HIGH */}
+                <Pressable
+                  style={[
+                    styles.typeOption,
+                    priority === "High" && { backgroundColor: "#6C63FF" },
+                  ]}
+                  onPress={() => setPriority("High")}
+                >
+                  <View
+                    style={[
+                      styles.priorityDot,
+                      { backgroundColor: priorityColors["High"] },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.typeText,
+                      priority === "High" && { color: "white" },
+                    ]}
+                  >
+                    High
+                  </Text>
+                </Pressable>
+
+                {/* LOW */}
+                <Pressable
+                  style={[
+                    styles.typeOption,
+                    priority === "Low" && { backgroundColor: "#6C63FF" },
+                  ]}
+                  onPress={() => setPriority("Low")}
+                >
+                  <View
+                    style={[
+                      styles.priorityDot,
+                      { backgroundColor: priorityColors["Low"] },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.typeText,
+                      priority === "Low" && { color: "white" },
+                    ]}
+                  >
+                    Low
+                  </Text>
+                </Pressable>
+
+                {/* MEDIUM
             <Pressable
               style={[
                 styles.typeOption,
@@ -560,90 +638,49 @@ export default function EditTask() {
               >
                 Medium
               </Text>
-            </Pressable>
+            </Pressable> */}
+              </View>
+            </View>
 
-            {/* HIGH */}
-            <Pressable
-              style={[
-                styles.typeOption,
-                priority === "High" && { backgroundColor: "#6C63FF" },
-              ]}
-              onPress={() => setPriority("High")}
-            >
-              <View
-                style={[
-                  styles.priorityDot,
-                  { backgroundColor: priorityColors["High"] },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.typeText,
-                  priority === "High" && { color: "white" },
-                ]}
-              >
-                High
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+            {/* DEADLINE */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Deadline</Text>
+              <View style={styles.timeRow}>
+                {/* DATE PICKER */}
+                <TouchableOpacity
+                  style={styles.timeCard}
+                  onPress={() => {
+                    setActiveDatePicker("deadline");
+                    setShowDatePicker(true);
+                  }}
+                >
+                  <Text style={styles.timeSmall}>Date</Text>
+                  <Text style={styles.timeLarge}>{formatDate(deadline)}</Text>
+                </TouchableOpacity>
 
-        {/* DEADLINE */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Deadline</Text>
-          <View style={styles.timeRow}>
-            {/* DATE PICKER */}
-            <TouchableOpacity
-              style={styles.timeCard}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.timeSmall}>Date</Text>
-              <Text style={styles.timeLarge}>
-                {formatDeadlineDate(deadline)}
-              </Text>
-            </TouchableOpacity>
-
-            {/* TIME PICKER */}
-            <TouchableOpacity
-              style={styles.timeCard}
-              onPress={() => {
-                setActivePicker("deadline");
-                setShowTimePicker(true);
-              }}
-            >
-              <Text style={styles.timeSmall}>Time</Text>
-              <Text style={styles.timeLarge}>
-                {deadline.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* AUTO-SCHEDULE TOGGLE */}
-        <View style={styles.section}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleText}>
-              Auto-schedule the best time for this task
-            </Text>
-            <Switch
-              value={isAuto}
-              onValueChange={setIsAuto}
-              trackColor={{ false: "#ccc", true: "#6C63FF" }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
-
-        {isAuto ? (
-          <>
+                {/* TIME PICKER */}
+                <TouchableOpacity
+                  style={styles.timeCard}
+                  onPress={() => {
+                    setActiveTimePicker("deadline");
+                    setShowTimePicker(true);
+                  }}
+                >
+                  <Text style={styles.timeSmall}>Time</Text>
+                  <Text style={styles.timeLarge}>
+                    {deadline.toLocaleTimeString("en-IN", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             {/* IF AUTO-SCHEDULE ON → SHOW DURATION INPUTS */}
             {/* DURATION */}
             <View style={styles.section}>
-              <Text style={styles.label}>Duration</Text>
+              <Text style={styles.label}>Approx. Duration</Text>
 
               <View style={styles.timeRow}>
                 {/* HOURS */}
@@ -673,6 +710,19 @@ export default function EditTask() {
           </>
         ) : (
           <>
+            {/* DATE PICKER */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
+                style={styles.timeCard}
+                onPress={() => {
+                  setActiveDatePicker("date");
+                  setShowDatePicker(true);
+                }}
+              >
+                <Text style={styles.timeLarge}>{formatDate(date)}</Text>
+              </TouchableOpacity>
+            </View>
             {/* MANUAL TIME SELECTOR (ONLY IF AUTO-SCHEDULE OFF) */}
             {/* Time */}
             <View style={styles.section}>
@@ -683,13 +733,13 @@ export default function EditTask() {
                 <TouchableOpacity
                   style={styles.timeCard}
                   onPress={() => {
-                    setActivePicker("start");
+                    setActiveTimePicker("start");
                     setShowTimePicker(true);
                   }}
                 >
                   <Text style={styles.timeSmall}>Start</Text>
                   <Text style={styles.timeLarge}>
-                    {startTime.toLocaleTimeString("en-US", {
+                    {startTime.toLocaleTimeString("en-IN", {
                       hour: "numeric",
                       minute: "2-digit",
                       hour12: true,
@@ -701,13 +751,13 @@ export default function EditTask() {
                 <TouchableOpacity
                   style={styles.timeCard}
                   onPress={() => {
-                    setActivePicker("end");
+                    setActiveTimePicker("end");
                     setShowTimePicker(true);
                   }}
                 >
                   <Text style={styles.timeSmall}>End</Text>
                   <Text style={styles.timeLarge}>
-                    {endTime.toLocaleTimeString("en-US", {
+                    {endTime.toLocaleTimeString("en-IN", {
                       hour: "numeric",
                       minute: "2-digit",
                       hour12: true,
@@ -722,19 +772,19 @@ export default function EditTask() {
         {/* DATE PICKER MODAL */}
         {showDatePicker && (
           <DateTimePicker
-            value={deadline}
+            value={activeDatePicker === "deadline" ? deadline : date}
             mode="date"
             display="spinner"
-            onChange={onChangeDeadlineDate}
+            onChange={onChangeDate}
           />
         )}
         {/* TIME PICKER MODAL */}
         {showTimePicker && (
           <DateTimePicker
             value={
-              activePicker === "start"
+              activeTimePicker === "start"
                 ? startTime
-                : activePicker === "end"
+                : activeTimePicker === "end"
                 ? endTime
                 : deadline
             }

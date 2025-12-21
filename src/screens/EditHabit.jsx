@@ -7,9 +7,6 @@ import {
   TouchableOpacity,
   Pressable,
   ScrollView,
-  Switch,
-  Modal,
-  FlatList,
   Alert,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -30,19 +27,48 @@ export default function EditHabit() {
   const existing = params.habit || {};
 
   /* ------------------------- STATES ------------------------- */
-  const [habitName, setHabitName] = useState(existing.habitName ?? "");
-  const [days, setDays] = useState(existing.days ?? Array(7).fill(false));
+  const [habitName, setHabitName] = useState(existing?.habitName ?? "");
+  const [days, setDays] = useState(existing?.days ?? Array(7).fill(false));
 
-  const [startTime, setStartTime] = useState(
-    existing.startTime ?? new Date(new Date().setHours(18, 0, 0, 0))
+  // const [startTime, setStartTime] = useState(
+  //   existing.startTime ?? new Date(new Date().setHours(18, 0, 0, 0))
+  // );
+  // const [endTime, setEndTime] = useState(
+  //   existing.endTime ?? new Date(new Date().setHours(19, 0, 0, 0))
+  // );
+
+  const [startMinutes, setStartMinutes] = useState(
+    existing?.startMinutes ?? 1080
   );
-  const [endTime, setEndTime] = useState(
-    existing.endTime ?? new Date(new Date().setHours(19, 0, 0, 0))
-  );
+  const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1140);
   const [activePicker, setActivePicker] = useState(null); // "start" or "end"
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   /* ------------------------- FUNCTIONS ------------------------- */
+
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
+  function minutesToDate(minutes) {
+    const now = new Date();
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0
+    );
+    date.setMinutes(minutes);
+    return date;
+  }
 
   const toggleDay = (index) => {
     const copy = [...days];
@@ -54,10 +80,12 @@ export default function EditHabit() {
     setShowTimePicker(false);
     if (!selectedTime) return;
 
+    const minutes = selectedTime.getHours() * 60 + selectedTime.getMinutes();
+
     if (activePicker === "start") {
-      setStartTime(selectedTime);
+      setStartMinutes(minutes);
     } else {
-      setEndTime(selectedTime);
+      setEndMinutes(minutes);
     }
   };
 
@@ -85,6 +113,7 @@ export default function EditHabit() {
   };
 
   const groupBusyBlocks = (rows) => {
+    // console.log(rows);
     const grouped = {};
     rows.forEach((row) => {
       const key = `${row.type}-${row.itemId}`;
@@ -98,7 +127,7 @@ export default function EditHabit() {
           days: [],
         };
       }
-      if (row.day) grouped[key].days.push(row.day);
+      if (row.day !== null) grouped[key].days.push(row.day);
     });
 
     return Object.values(grouped);
@@ -114,10 +143,12 @@ export default function EditHabit() {
       ) {
         continue;
       }
+      // console.log(item.days);
 
       const shareDay = item.days.some((dayIndex) => days[dayIndex]);
-
+      // console.log("not collided");
       if (!shareDay) continue;
+      // console.log("collided");
 
       if (
         intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
@@ -142,8 +173,8 @@ export default function EditHabit() {
         return Alert.alert("Missing Days", "Please select at least one day.");
       }
 
-      const startM = startTime.getHours() * 60 + startTime.getMinutes();
-      const endM = endTime.getHours() * 60 + endTime.getMinutes();
+      const startM = startMinutes;
+      const endM = endMinutes;
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const blocks = await db.getAllAsync(`
@@ -198,15 +229,9 @@ export default function EditHabit() {
       if (mode === "add") {
         const result = await db.runAsync(
           `INSERT INTO habits
-            (title, start_time, end_time, start_minutes, end_minutes)
-            VALUES (?, ?, ?, ?, ?)`,
-          [
-            habitName.trim(),
-            startTime.toISOString(),
-            endTime.toISOString(),
-            startM,
-            endM,
-          ]
+            (title, start_minutes, end_minutes)
+            VALUES (?, ?, ?)`,
+          [habitName.trim(), startM, endM]
         );
 
         const newId = result.lastInsertRowId;
@@ -226,16 +251,9 @@ export default function EditHabit() {
 
         await db.runAsync(
           `UPDATE habits SET
-              title=?, start_time=?, end_time=?, start_minutes=?, end_minutes=?
+              title=?, start_minutes=?, end_minutes=?
             WHERE id=?`,
-          [
-            habitName.trim(),
-            startTime.toISOString(),
-            endTime.toISOString(),
-            startM,
-            endM,
-            existing.id,
-          ]
+          [habitName.trim(), startM, endM, existing.id]
         );
 
         await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
@@ -304,11 +322,7 @@ export default function EditHabit() {
             >
               <Text style={styles.timeSmall}>Start</Text>
               <Text style={styles.timeLarge}>
-                {startTime.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {minutesToTimeAMPM(startMinutes)}
               </Text>
             </TouchableOpacity>
 
@@ -322,11 +336,7 @@ export default function EditHabit() {
             >
               <Text style={styles.timeSmall}>End</Text>
               <Text style={styles.timeLarge}>
-                {endTime.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {minutesToTimeAMPM(endMinutes)}
               </Text>
             </TouchableOpacity>
           </View>
@@ -334,7 +344,11 @@ export default function EditHabit() {
 
         {showTimePicker && (
           <DateTimePicker
-            value={activePicker === "start" ? startTime : endTime}
+            value={
+              activePicker === "start"
+                ? minutesToDate(startMinutes)
+                : minutesToDate(endMinutes)
+            }
             mode="time"
             display="spinner"
             onChange={onChangeTime}

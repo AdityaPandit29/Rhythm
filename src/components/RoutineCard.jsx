@@ -7,8 +7,8 @@ import { useSQLiteContext } from "expo-sqlite";
 export default function RoutineCard({
   id,
   name,
-  startTime,
-  endTime,
+  startMinutes,
+  endMinutes,
   daysSelected,
   onDeleted,
 }) {
@@ -57,6 +57,19 @@ export default function RoutineCard({
     );
   };
 
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
+  const startTime = minutesToTimeAMPM(startMinutes);
+  const endTime = minutesToTimeAMPM(endMinutes);
+
   return (
     <View style={styles.card}>
       {/* TOP RIGHT ICONS */}
@@ -69,8 +82,8 @@ export default function RoutineCard({
               routine: {
                 id: id,
                 label: name,
-                startTime: startTime,
-                endTime: endTime,
+                startMinutes: startMinutes,
+                endMinutes: endMinutes,
                 days: booleanDays,
               },
             })
@@ -89,17 +102,7 @@ export default function RoutineCard({
 
       {/* SCHEDULED TIME */}
       <Text style={styles.schedule}>
-        {startTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}{" "}
-        -{" "}
-        {endTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}
+        {startTime} - {endTime}
       </Text>
 
       {/* WEEKDAY */}

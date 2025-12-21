@@ -7,8 +7,8 @@ import { useSQLiteContext } from "expo-sqlite";
 export default function HabitCard({
   id,
   name,
-  startTime,
-  endTime,
+  startMinutes,
+  endMinutes,
   bestStreak,
   currentStreak,
   daysSelected,
@@ -24,6 +24,7 @@ export default function HabitCard({
   daysSelected.forEach((day) => {
     booleanDays[day] = true;
   });
+  // console.log(booleanDays);
 
   // const h = Math.floor(duration / 60);
   // const m = duration % 60;
@@ -55,6 +56,19 @@ export default function HabitCard({
     ]);
   };
 
+  function minutesToTimeAMPM(minutes) {
+    let hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")} ${ampm}`;
+  }
+
+  const startTime = minutesToTimeAMPM(startMinutes);
+  const endTime = minutesToTimeAMPM(endMinutes);
+
   return (
     <View style={styles.card}>
       {/* TOP RIGHT ICONS */}
@@ -67,7 +81,8 @@ export default function HabitCard({
               habit: {
                 id: id,
                 habitName: name,
-                startTime: startTime,
+                startMinutes: startMinutes,
+                endMinutes: endMinutes,
                 days: booleanDays,
               },
             })
@@ -86,26 +101,8 @@ export default function HabitCard({
 
       {/* TIME */}
       <Text style={styles.schedule}>
-        {startTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}{" "}
-        -{" "}
-        {endTime.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })}
+        {startTime} - {endTime}
       </Text>
-
-      {/* DURATION */}
-      {/* <View style={styles.durationRow}>
-        <Entypo name="stopwatch" size={16} color="#555" />
-        <Text style={styles.durationText}>Duration:</Text>
-        {h > 0 && <Text style={styles.durationText}>{h}h</Text>}
-        {m > 0 && <Text style={styles.durationText}>{m}min</Text>}
-      </View> */}
 
       {/* WEEKDAY */}
       <View style={styles.daysRow}>
@@ -150,14 +147,6 @@ export default function HabitCard({
           <Text style={styles.streakText}>Best: {bestStreak} days</Text>
         </View>
       </View>
-      {/* BUTTONS
-      {isAuto === 1 && (
-        <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.rescheduleBtn}>
-            <Text style={styles.rescheduleText}>Reschedule</Text>
-          </TouchableOpacity>
-        </View>
-      )} */}
     </View>
   );
 }
