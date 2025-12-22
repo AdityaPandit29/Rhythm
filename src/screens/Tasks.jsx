@@ -76,7 +76,7 @@ export default function Tasks() {
           priority: t.priority,
           isAuto: t.is_auto,
           deadlineDate: t.deadline_date,
-          deadlineMinutes: t.deadlineMinutes,
+          deadlineMinutes: t.deadline_minutes,
           createdAt: t.created_at,
 
           // Scheduling info

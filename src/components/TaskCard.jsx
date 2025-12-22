@@ -18,30 +18,31 @@ export default function TaskCard({
   durationLeft,
   onDeleted,
 }) {
+  const navigation = useNavigation();
+  const db = useSQLiteContext();
+
+  // ✅ Convert minutes to AM/PM time
   function minutesToTimeAMPM(minutes) {
     let hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12 || 12; // 0 → 12, 13 → 1
+    hours = hours % 12 || 12;
     return `${hours.toString().padStart(2, "0")}:${mins
       .toString()
       .padStart(2, "0")} ${ampm}`;
   }
 
+  // ✅ Relative date formatting
   function formatRelativeDate(dateString) {
-    // Parse Indian format "23/12/2025" → Date object
-    const date = new Date(dateString); // JS months 0-indexed
+    const date = new Date(dateString);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24));
 
-    // Today/Tomorrow/Yesterday
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Tomorrow";
     if (diffDays === -1) return "Yesterday";
 
-    // Short date format like "Jan 12, 2025"
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -49,55 +50,41 @@ export default function TaskCard({
     });
   }
 
-  const navigation = useNavigation();
-  const db = useSQLiteContext();
-
-  const priorityColors = {
-    High: "#FF5555",
-    Low: "#4CAF50",
-  };
-
-  const formatRelativeDeadline = (svSeDate) => {
+  // ✅ Format deadline (sv-SE + relative + time)
+  const formatRelativeDeadline = (svSeDate, deadlineMins) => {
     if (!svSeDate) return "";
 
-    // Parse YYYY-MM-DD → Date (today's date at midnight)
     const [year, month, day] = svSeDate.split("-").map(Number);
-    const date = new Date(year, month - 1, day); // JS months 0-indexed
-
-    // Normalize dates (ignore time)
+    const date = new Date(year, month - 1, day);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const target = new Date(date);
     target.setHours(0, 0, 0, 0);
-
     const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
 
     let dayLabel;
-
-    if (diffDays === 0) {
-      dayLabel = "Today";
-    } else if (diffDays === 1) {
-      dayLabel = "Tomorrow";
-    } else if (diffDays === -1) {
-      dayLabel = "Yesterday";
-    } else {
+    if (diffDays === 0) dayLabel = "Today";
+    else if (diffDays === 1) dayLabel = "Tomorrow";
+    else if (diffDays === -1) dayLabel = "Yesterday";
+    else
       dayLabel = date.toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
       });
-    }
 
-    // Add time if available (from separate minutes field)
-    // Pass deadlineMinutes as second param, or fetch from DB
-    const time = "time" ? minutesToTimeAMPM(deadlineMinutes) : "";
+    // ✅ FIXED: Always show time if deadlineMins exists
+    const time =
+      deadlineMins !== undefined && deadlineMins !== null
+        ? minutesToTimeAMPM(deadlineMins)
+        : "";
 
-    if (time) {
-      return `${dayLabel} at ${time}`;
-    }
+    return time ? `${dayLabel} at ${time}` : dayLabel;
+  };
 
-    return dayLabel;
+  const priorityColors = {
+    High: "#FF5555",
+    Low: "#4CAF50",
   };
 
   const handleDelete = () => {
@@ -115,7 +102,6 @@ export default function TaskCard({
               id,
             ]);
             await db.runAsync(`DELETE FROM tasks WHERE id = ?`, [id]);
-
             if (onDeleted) {
               onDeleted();
             }
@@ -145,7 +131,7 @@ export default function TaskCard({
                 deadlineDate: deadlineDate,
                 deadlineMinutes: deadlineMinutes,
                 scheduledDate: scheduledDates[0],
-                durationLeft: durationLeft, // used for selected Hours and Minutes
+                durationLeft: durationLeft,
                 startMinutes: startMinutes[0],
                 endMinutes: endMinutes[0],
               },
@@ -154,7 +140,6 @@ export default function TaskCard({
         >
           <MaterialCommunityIcons name="pencil" size={20} color="#6C63FF" />
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.iconBtn} onPress={handleDelete}>
           <MaterialCommunityIcons name="delete" size={20} color="#D9534F" />
         </TouchableOpacity>
@@ -163,7 +148,21 @@ export default function TaskCard({
       {/* TITLE */}
       <Text style={styles.title}>{name}</Text>
 
-      {isAuto === 1 && (
+      {/* CONDITION 1: Manual Task (isAuto === 0) */}
+      {isAuto === 0 && (
+        <>
+          <Text style={styles.schedule}>
+            {formatRelativeDate(scheduledDates[0])}
+          </Text>
+          <Text style={styles.schedule}>
+            {minutesToTimeAMPM(startMinutes[0])} -{" "}
+            {minutesToTimeAMPM(endMinutes[0])}
+          </Text>
+        </>
+      )}
+
+      {/* CONDITION 2: Auto Task with Duration (isAuto === 1 && totalDuration > 0) */}
+      {isAuto === 1 && totalDuration > 0 && (
         <>
           {/* META ROW: PRIORITY + TYPE */}
           <View style={styles.metaRow}>
@@ -176,44 +175,51 @@ export default function TaskCard({
               />
               <Text style={styles.priorityText}>{priority} Priority</Text>
             </View>
-
-            {isAuto === 1 && <Text style={styles.monthlyBadge}>Auto</Text>}
-            {totalDuration && totalDuration === 0 && (
-              <Text style={styles.monthlyBadge}>Quick</Text>
-            )}
+            <Text style={styles.monthlyBadge}>Auto</Text>
           </View>
 
           {/* DEADLINE */}
           <Text style={styles.subText}>
-            Due : {`${formatRelativeDeadline(deadlineDate)}`}
+            Due: {formatRelativeDeadline(deadlineDate, deadlineMinutes)}
           </Text>
+
+          {/* SCHEDULE AND DURATION */}
+          <Text style={styles.schedule}>
+            {formatRelativeDate(scheduledDates[0])}
+          </Text>
+          <Text style={styles.schedule}>
+            {minutesToTimeAMPM(startMinutes[0])} -{" "}
+            {minutesToTimeAMPM(endMinutes[0])}
+          </Text>
+          <View style={styles.durationRow}>
+            <Entypo name="stopwatch" size={16} color="#555" />
+            <Text style={styles.durationText}>
+              Duration: {endMinutes[0] - startMinutes[0]}min
+            </Text>
+          </View>
         </>
       )}
 
-      {/* SCHEDULE AND DURATION */}
-      <Text style={styles.schedule}>
-        {formatRelativeDate(scheduledDates[0])}
-      </Text>
-      <Text style={styles.schedule}>
-        {minutesToTimeAMPM(startMinutes[0])} -{" "}
-        {minutesToTimeAMPM(endMinutes[0])}
-      </Text>
-      {isAuto === 1 && (
-        <View style={styles.durationRow}>
-          <Entypo name="stopwatch" size={16} color="#555" />
-          <Text style={styles.durationText}>
-            Duration: {endMinutes[0] - startMinutes[0]}
+      {/* CONDITION 3: Quick Auto Task (isAuto === 1 && totalDuration === 0) */}
+      {isAuto === 1 && totalDuration === 0 && (
+        <>
+          <View style={styles.metaRow}>
+            <View style={styles.priorityRow}>
+              <View
+                style={[
+                  styles.priorityDot,
+                  { backgroundColor: priorityColors[priority] },
+                ]}
+              />
+              <Text style={styles.priorityText}>{priority} Priority</Text>
+            </View>
+            <Text style={styles.monthlyBadge}>Auto</Text>
+            <Text style={styles.monthlyBadge}>Quick</Text>
+          </View>
+          <Text style={styles.subText}>
+            Due: {formatRelativeDeadline(deadlineDate, deadlineMinutes)}
           </Text>
-        </View>
-      )}
-
-      {/* BUTTONS */}
-      {isAuto === 1 && (
-        <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.rescheduleBtn} onPress={onReschedule}>
-            <Text style={styles.rescheduleText}>Reschedule</Text>
-          </TouchableOpacity>
-        </View>
+        </>
       )}
     </View>
   );
@@ -232,7 +238,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     position: "relative",
   },
-
   iconRow: {
     position: "absolute",
     right: 12,
@@ -240,7 +245,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     zIndex: 10,
   },
-
   iconBtn: {
     width: 32,
     height: 32,
@@ -250,7 +254,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginLeft: 10,
   },
-
   title: {
     fontSize: 18,
     fontWeight: "700",
@@ -258,32 +261,27 @@ const styles = StyleSheet.create({
     paddingRight: 70,
     marginBottom: 10,
   },
-
   metaRow: {
     flexDirection: "row",
     justifyContent: "flex-start",
     gap: 6,
     marginBottom: 4,
   },
-
   priorityRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-
   priorityDot: {
     width: 10,
     height: 10,
     borderRadius: 10,
   },
-
   priorityText: {
     fontSize: 13,
     fontWeight: "600",
     color: "#333",
   },
-
   monthlyBadge: {
     backgroundColor: "#F7F7FF",
     paddingHorizontal: 12,
@@ -293,44 +291,37 @@ const styles = StyleSheet.create({
     color: "#444",
     fontWeight: "600",
   },
-
   subText: {
     fontSize: 13,
     color: "#777",
     marginTop: 4,
   },
-
   schedule: {
     fontSize: 14,
     fontWeight: "500",
     color: "#444",
     marginTop: 6,
   },
-
   bold: {
     fontWeight: "700",
     color: "#333",
   },
-
   durationRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-
   durationText: {
     fontSize: 14,
     fontWeight: "500",
     color: "#444",
   },
-
   btnRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 10,
     marginTop: 14,
   },
-
   rescheduleBtn: {
     borderWidth: 1.2,
     borderColor: "#6C63FF",
@@ -338,7 +329,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
-
   rescheduleText: {
     color: "#6C63FF",
     fontWeight: "600",

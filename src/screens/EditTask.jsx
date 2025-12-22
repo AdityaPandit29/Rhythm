@@ -17,6 +17,14 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import { useSQLiteContext } from "expo-sqlite";
+import {
+  computeAuthority,
+  buildCalendar,
+  autoSchedule,
+  MAX_LOOKAHEAD_DAYS,
+  roundToFriendlyDuration,
+  getFreeSlots,
+} from "../utils/scheduling.js";
 
 export default function EditTask() {
   const db = useSQLiteContext();
@@ -311,8 +319,6 @@ export default function EditTask() {
 
       const busyItems = groupBusyBlocks(routinesAndHabits, manualTasks);
 
-      /* ---------- AUTO TASK ---------- */
-
       if (isAuto) {
         /* ---------- DEADLINE VALIDATION ---------- */
 
@@ -333,26 +339,28 @@ export default function EditTask() {
           deadlineDay < today ||
           (deadlineDay.getTime() === today.getTime() && deadlineFull < now)
         ) {
-          Alert.alert("Invalid Deadline", "Deadline cannot be in the past.");
+          return Alert.alert(
+            "Invalid Deadline",
+            "Deadline cannot be in the past."
+          );
         }
         const totalMinutes = selectedHours * 60 + selectedMinutes;
 
-        // quick task
         if (totalMinutes === 0) {
           if (mode === "add") {
             await db.runAsync(
               `INSERT INTO tasks
-                (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                      (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 taskName.trim(),
-                null,
+                priority,
                 1,
                 deadlineDate.toLocaleDateString("sv-SE"),
                 deadlineMinutes,
                 0,
                 null,
-                new Date().toLocaleDateString(),
+                new Date().toISOString(),
               ]
             );
           } else {
@@ -364,11 +372,11 @@ export default function EditTask() {
 
             await db.runAsync(
               `UPDATE tasks SET
-                title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
-              WHERE id=?`,
+                      title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
+                    WHERE id=?`,
               [
                 taskName.trim(),
-                null,
+                priority,
                 1,
                 deadlineDate.toLocaleDateString("sv-SE"),
                 deadlineMinutes,
@@ -381,7 +389,9 @@ export default function EditTask() {
         } else {
           const newAuthority = computeAuthority({
             priority,
-            deadline: deadlineDate,
+            deadlineDate: deadlineDate.toLocaleDateString("sv-SE"),
+            deadlineMinutes: deadlineMinutes,
+            duration_left: totalMinutes,
           });
 
           const today = new Date();
@@ -393,36 +403,71 @@ export default function EditTask() {
           const scheduleEnd = maxEnd;
           try {
             await db.runAsync("BEGIN TRANSACTION");
+
+            // ===== 1. SAVE TASK FIRST (get taskId) =====
+            let taskId;
+            const deadlineDateStr = deadlineDate.toLocaleDateString("sv-SE");
+
+            if (mode === "edit") {
+              taskId = existing.id;
+              await db.runAsync(
+                `UPDATE tasks SET
+               title=?, priority=?, is_auto=1, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
+               WHERE id=?`,
+                [
+                  taskName.trim(),
+                  priority,
+                  deadlineDateStr,
+                  deadlineMinutes,
+                  totalMinutes,
+                  totalMinutes,
+                  taskId,
+                ]
+              );
+
+              // Free current task's existing schedules
+              await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [
+                taskId,
+              ]);
+            } else {
+              const insertResult = await db.runAsync(
+                `INSERT INTO tasks
+               (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
+               VALUES (?, ?, 1, ?, ?, ?, ?, ?)`,
+                [
+                  taskName.trim(),
+                  priority,
+                  deadlineDateStr,
+                  deadlineMinutes,
+                  totalMinutes,
+                  totalMinutes,
+                  new Date().toISOString(),
+                ]
+              );
+              taskId = insertResult.lastInsertRowId;
+            }
+
             let existingAutoTasks = [];
 
-            // free current task’s time
-            if (mode === "edit") {
-              await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [
-                existing.id,
-              ]);
-
-              existingAutoTasks = await db.getAllAsync(
-                `
-        SELECT * FROM tasks
-        WHERE is_auto = 1 AND duration_left > 0 AND id != ?
-      `,
-                [existing.id]
-              );
-            } else {
-              existingAutoTasks = await db.getAllAsync(`
-        SELECT * FROM tasks
-        WHERE is_auto = 1 AND duration_left > 0
-      `);
-            }
+            existingAutoTasks = await db.getAllAsync(
+              `SELECT * FROM tasks
+                WHERE is_auto = 1 AND duration_left > 0 AND id != ?
+                `,
+              [taskId]
+            );
 
             const mappedAutoTasks = existingAutoTasks.map((t) => ({
               id: t.id,
               title: t.title,
-              duration_left: t.duration_left,
-              deadline: new Date(t.deadline),
+              totalMinutes: t.total_duration,
+              priority: t.priority,
+              deadlineDate: t.deadline_date,
+              deadlineMinutes: t.deadline_minutes,
               authority: computeAuthority({
-                priority: t.priority,
-                deadline: new Date(t.deadline),
+                priority: t.priority || "Low",
+                deadlineDate: t.deadline_date,
+                deadlineMinutes: t.deadline_minutes || 0,
+                duration_left: t.duration_left,
               }),
             }));
 
@@ -439,35 +484,39 @@ export default function EditTask() {
 
             // push current task
             reschedulableTasks.push({
-              id: existing?.id ?? null,
+              id: taskId,
               title: taskName.trim(),
-              duration_left: totalMinutes,
-              deadline: deadlineDate,
+              priority: priority,
+              totalMinutes: totalMinutes,
+              deadlineDate: deadlineDateStr,
+              deadlineMinutes: deadlineMinutes,
               authority: newAuthority,
             });
 
+            // ===== 6. GET FIXED SCHEDULES =====
             const fixedIds = fixedAutoTasks.map((t) => t.id);
-
             let fixedSchedulesRow = [];
-            if (fixedIds.length) {
+
+            if (fixedIds.length > 0) {
               fixedSchedulesRow = await db.getAllAsync(
-                `SELECT ts.start_minutes AS start_minutes,
-                  ts.end_minutes AS end_minutes,
-                  ts.date AS date,
-                  'task' AS type,
-                  t.id AS itemId,
-                  t.title AS title
-                FROM task_schedules ts
-                JOIN tasks t ON ts.taskId = t.id
-                WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
+                `SELECT 
+                ts.start_minutes AS start_minutes,
+                ts.end_minutes AS end_minutes,
+                ts.date AS date,
+                'task' AS type,
+                t.id AS itemId,
+                t.title AS title
+               FROM task_schedules ts
+               JOIN tasks t ON ts.taskId = t.id
+               WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
                 fixedIds
               );
             }
 
-            const fixedSchedules = groupBusyBlocks(fixedSchedulesRow);
-
+            const fixedSchedules = groupBusyBlocks([], fixedSchedulesRow);
             const fixedItems = [...busyItems, ...fixedSchedules];
 
+            // ===== 7. BUILD CALENDAR & SCHEDULE =====
             const calendar = buildCalendar({
               busyItems: fixedItems,
               scheduleStart: today,
@@ -483,61 +532,37 @@ export default function EditTask() {
               scheduleEnd,
             });
 
+            console.log("after autoscheduling");
+
+            // ===== 8. CLEAR AFFECTED SCHEDULES =====
             const affectedTaskIds = reschedulableTasks
               .filter((t) => t.id !== null)
               .map((t) => t.id);
 
-            if (affectedTaskIds.length) {
+            if (affectedTaskIds.length > 0) {
               await db.runAsync(
                 `DELETE FROM task_schedules
-     WHERE taskId IN (${affectedTaskIds.map(() => "?").join(",")})`,
+               WHERE taskId IN (${affectedTaskIds.map(() => "?").join(",")})`,
                 affectedTaskIds
               );
             }
 
-            // --- SAVE ---
-            if (mode === "edit") {
-              await db.runAsync(
-                `UPDATE tasks SET
-          title=?, priority=?, is_auto=1, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
-         WHERE id=?`,
-                [
-                  taskName.trim(),
-                  priority,
-                  deadlineDate.toLocaleDateString("sv-SE"),
-                  deadlineMinutes,
-                  totalMinutes,
-                  totalMinutes,
-                  existing.id,
-                ]
-              );
-            } else {
-              await db.runAsync(
-                `INSERT INTO tasks
-     (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
-     VALUES (?, ?, 1, ?, ?, ?, ?)`,
-                [
-                  taskName.trim(),
-                  priority,
-                  deadlineDate.toLocaleDateString("sv-SE"),
-                  deadlineMinutes,
-                  totalMinutes,
-                  totalMinutes,
-                  new Date().toISOString(),
-                ]
-              );
-            }
-
-            // const taskId = res.lastInsertRowId;//////////////////////////////////// how will we get the current task's schedule if we dont currently have the taskId
-
+            // ===== 9. INSERT NEW SCHEDULES =====
             for (const s of scheduledResults) {
               await db.runAsync(
                 `INSERT INTO task_schedules
-     (taskId, date, start_minutes, end_minutes, duration)
-     VALUES (?, ?, ?, ?, ?)`,
-                [s.taskId, s.date, s.start, s.end, s.end - s.start]
+               (taskId, date, start_minutes, end_minutes, duration)
+               VALUES (?, ?, ?, ?, ?)`,
+                [
+                  s.taskId, // All have real IDs now
+                  s.date,
+                  s.start_minutes,
+                  s.end_minutes,
+                  s.end_minutes - s.start_minutes,
+                ]
               );
             }
+
             await db.runAsync("COMMIT");
           } catch (err) {
             await db.runAsync("ROLLBACK");
@@ -548,8 +573,6 @@ export default function EditTask() {
             );
           }
         }
-
-        navigation.goBack();
       } else {
         const now = new Date();
 
