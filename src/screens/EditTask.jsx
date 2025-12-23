@@ -18,12 +18,14 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import { useSQLiteContext } from "expo-sqlite";
 import {
+  groupBusyBlocks,
+  intervalsOverlap,
   computeAuthority,
   buildCalendar,
   autoSchedule,
   MAX_LOOKAHEAD_DAYS,
-  roundToFriendlyDuration,
-  getFreeSlots,
+  loadManualBlocks,
+  rebalance,
 } from "../utils/scheduling.js";
 
 export default function EditTask() {
@@ -78,8 +80,6 @@ export default function EditTask() {
   const [deadlineMinutes, setDeadlineMinutes] = useState(
     existing?.deadlineMinutes ?? 1439
   );
-
-  // console.log(existing.scheduledDates);
 
   const [date, setDate] = useState(
     existing?.scheduledDate
@@ -161,29 +161,6 @@ export default function EditTask() {
     }
   };
 
-  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
-    const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
-
-    const aCross = aStart > aEnd; // crosses midnight
-    const bCross = bStart > bEnd; // crosses midnight
-
-    if (!aCross && !bCross) {
-      return check(aStart, aEnd, bStart, bEnd);
-    }
-
-    if (aCross && bCross) {
-      return true; // both span midnight → guaranteed overlap
-    }
-
-    if (aCross) {
-      return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
-    }
-
-    if (bCross) {
-      return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
-    }
-  };
-
   const findConflict = ({ items, date, startM, endM }) => {
     const dateString = date.toLocaleDateString("sv-SE");
     const day = date.getDay();
@@ -228,50 +205,6 @@ export default function EditTask() {
     return null;
   };
 
-  const groupBusyBlocks = (recurring, tasks) => {
-    const grouped = {};
-
-    recurring.forEach((row) => {
-      const key = `${row.type}-${row.itemId}`;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          type: row.type,
-          id: row.itemId,
-          title: row.title,
-          start_minutes: row.start_minutes,
-          end_minutes: row.end_minutes,
-          days: [],
-        };
-      }
-
-      if (!grouped[key].days.includes(row.day)) {
-        grouped[key].days.push(row.day);
-      }
-    });
-
-    tasks.forEach((row) => {
-      const key = `${row.type}-${row.itemId}`;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          type: row.type,
-          id: row.itemId,
-          title: row.title,
-          start_minutes: [],
-          end_minutes: [],
-          dates: [],
-        };
-      }
-
-      grouped[key].dates.push(row.date);
-      grouped[key].start_minutes.push(row.start_minutes);
-      grouped[key].end_minutes.push(row.end_minutes);
-    });
-
-    return Object.values(grouped);
-  };
-
   const validateAndSave = async () => {
     try {
       /* ---------- BASIC VALIDATION ---------- */
@@ -279,45 +212,8 @@ export default function EditTask() {
         return Alert.alert("Missing Title", "Please enter a task title.");
       }
 
-      /* ---------- LOAD ALL BLOCKS ---------- */
-      const routinesAndHabits = await db.getAllAsync(`
-        SELECT 
-          r.start_minutes AS start_minutes,
-          r.end_minutes AS end_minutes,
-          d.day AS day,
-          'routine' AS type,
-          r.id AS itemId,
-          r.title AS title
-        FROM routines r
-        LEFT JOIN routine_days d ON r.id = d.routineId
-
-        UNION ALL
-
-        SELECT 
-          h.start_minutes AS start_minutes,
-          h.end_minutes AS end_minutes,
-          hd.day AS day,
-          'habit' AS type,
-          h.id AS itemId,
-          h.title AS title
-        FROM habits h
-        LEFT JOIN habit_days hd ON h.id = hd.habitId
-      `);
-
-      const manualTasks = await db.getAllAsync(`
-        SELECT
-          ts.start_minutes AS start_minutes,
-          ts.end_minutes AS end_minutes,
-          ts.date AS date,
-          'task' AS type,
-          t.id AS itemId,
-          t.title AS title
-        FROM task_schedules ts
-        LEFT JOIN tasks t ON ts.taskId = t.id
-        WHERE t.is_auto = 0;
-      `);
-
-      const busyItems = groupBusyBlocks(routinesAndHabits, manualTasks);
+      const { recurring, manualTasks } = await loadManualBlocks(db);
+      const busyItems = groupBusyBlocks(recurring, manualTasks);
 
       if (isAuto) {
         /* ---------- DEADLINE VALIDATION ---------- */
@@ -399,8 +295,8 @@ export default function EditTask() {
 
           const maxEnd = new Date(today);
           maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
-
           const scheduleEnd = maxEnd;
+
           try {
             await db.runAsync("BEGIN TRANSACTION");
 
@@ -451,7 +347,7 @@ export default function EditTask() {
 
             existingAutoTasks = await db.getAllAsync(
               `SELECT * FROM tasks
-                WHERE is_auto = 1 AND duration_left > 0 AND id != ?
+                WHERE is_auto = 1 AND total_duration > 0 AND id != ?
                 `,
               [taskId]
             );
@@ -467,7 +363,7 @@ export default function EditTask() {
                 priority: t.priority || "Low",
                 deadlineDate: t.deadline_date,
                 deadlineMinutes: t.deadline_minutes || 0,
-                duration_left: t.duration_left,
+                duration_left: t.total_duration,
               }),
             }));
 
@@ -531,8 +427,7 @@ export default function EditTask() {
               scheduleStart: today,
               scheduleEnd,
             });
-
-            console.log("after autoscheduling");
+            console.log("after autoscheudle");
 
             // ===== 8. CLEAR AFFECTED SCHEDULES =====
             const affectedTaskIds = reschedulableTasks
@@ -567,10 +462,7 @@ export default function EditTask() {
           } catch (err) {
             await db.runAsync("ROLLBACK");
 
-            Alert.alert(
-              "Scheduling failed",
-              err.message || "Could not reschedule task"
-            );
+            throw new Error(err?.message || "Auto task scheduling failed");
           }
         }
       } else {
@@ -627,86 +519,101 @@ export default function EditTask() {
         }
 
         /* ---------- SAVE TASK ---------- */
-        let taskId;
+        try {
+          await db.runAsync("BEGIN TRANSACTION");
+          let taskId;
 
-        if (mode === "add") {
-          const res = await db.runAsync(
-            `INSERT INTO tasks
+          if (mode === "add") {
+            const res = await db.runAsync(
+              `INSERT INTO tasks
          (title, priority, is_auto, deadline_date, deadline_minutes, total_duration, duration_left, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              taskName.trim(),
-              null,
-              0,
-              null,
-              null,
-              null,
-              null,
-              new Date().toISOString(),
-            ]
-          );
-          taskId = res.lastInsertRowId;
-        } else {
-          taskId = existing.id;
+              [
+                taskName.trim(),
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                new Date().toISOString(),
+              ]
+            );
+            taskId = res.lastInsertRowId;
+          } else {
+            taskId = existing.id;
 
-          await db.runAsync(
-            `UPDATE tasks SET
+            await db.runAsync(
+              `UPDATE tasks SET
           title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
          WHERE id=?`,
-            [taskName.trim(), null, 0, null, null, null, null, taskId]
-          );
+              [taskName.trim(), null, 0, null, null, null, null, taskId]
+            );
 
-          await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
-            taskId,
-          ]);
-        }
-
-        /* ---------- INSERT MANUAL SCHEDULES ---------- */
-        if (endM <= startM) {
-          await db.runAsync(
-            `INSERT INTO task_schedules
-          (taskId, date, start_minutes, end_minutes, duration)
-          VALUES (?, ?, ?, ?, ?)`,
-            [
+            await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
               taskId,
-              selectedDate.toLocaleDateString("sv-SE"),
-              startM,
-              1440,
-              1440 - startM,
-            ]
-          );
+            ]);
+          }
 
-          const nextDate = new Date(selectedDate);
-          nextDate.setDate(nextDate.getDate() + 1);
-
-          await db.runAsync(
-            `INSERT INTO task_schedules
+          /* ---------- INSERT MANUAL SCHEDULES ---------- */
+          if (endM <= startM) {
+            await db.runAsync(
+              `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
           VALUES (?, ?, ?, ?, ?)`,
-            [taskId, nextDate.toLocaleDateString("sv-SE"), 0, endM, endM]
-          );
-        } else {
-          await db.runAsync(
-            `INSERT INTO task_schedules
+              [
+                taskId,
+                selectedDate.toLocaleDateString("sv-SE"),
+                startM,
+                1440,
+                1440 - startM,
+              ]
+            );
+
+            const nextDate = new Date(selectedDate);
+            nextDate.setDate(nextDate.getDate() + 1);
+
+            await db.runAsync(
+              `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
           VALUES (?, ?, ?, ?, ?)`,
-            [
-              taskId,
-              selectedDate.toLocaleDateString("sv-SE"),
-              startM,
-              endM,
-              endM - startM,
-            ]
+              [taskId, nextDate.toLocaleDateString("sv-SE"), 0, endM, endM]
+            );
+          } else {
+            await db.runAsync(
+              `INSERT INTO task_schedules
+          (taskId, date, start_minutes, end_minutes, duration)
+          VALUES (?, ?, ?, ?, ?)`,
+              [
+                taskId,
+                selectedDate.toLocaleDateString("sv-SE"),
+                startM,
+                endM,
+                endM - startM,
+              ]
+            );
+          }
+
+          //REBALANCE
+          await rebalance(db, "task");
+
+          await db.runAsync("COMMIT");
+        } catch (error) {
+          await db.runAsync("ROLLBACK");
+          console.log(error.message);
+
+          throw new Error(
+            error?.message || "Rebalance after scheduling task failed"
           );
         }
       }
 
       navigation.goBack();
     } catch (err) {
-      console.error("validateAndSave (task) error:", err);
+      // console.error("validateAndSave (task) error:", err);
       Alert.alert(
         "Save Failed",
-        err?.message || "Something went wrong while saving the habit."
+        err?.message || "Something went wrong while saving the task."
       );
     }
   };

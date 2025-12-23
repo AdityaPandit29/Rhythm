@@ -17,9 +17,113 @@ export const PRIORITY_WEIGHT = {
  * Convert Date to YYYY-MM-DD format (safe for DB)
  */
 
-// export function dateToYYYYMMDD(date) {
-//   return date.toLocaleDateString("sv-SE"); // Always YYYY-MM-DD
-// }
+export const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
+  const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
+
+  const aCross = aStart > aEnd; // crosses midnight
+  const bCross = bStart > bEnd; // crosses midnight
+
+  if (!aCross && !bCross) {
+    return check(aStart, aEnd, bStart, bEnd);
+  }
+
+  if (aCross && bCross) {
+    return true; // both span midnight → guaranteed overlap
+  }
+
+  if (aCross) {
+    return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
+  }
+
+  if (bCross) {
+    return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
+  }
+};
+
+export const loadManualBlocks = async (db) => {
+  const recurring = await db.getAllAsync(`
+    SELECT 
+      r.start_minutes AS start_minutes,
+      r.end_minutes AS end_minutes,
+      d.day AS day,
+      'routine' AS type,
+      r.id AS itemId,
+      r.title AS title
+    FROM routines r
+    LEFT JOIN routine_days d ON r.id = d.routineId
+
+    UNION ALL
+
+    SELECT 
+      h.start_minutes AS start_minutes,
+      h.end_minutes AS end_minutes,
+      hd.day AS day,
+      'habit' AS type,
+      h.id AS itemId,
+      h.title AS title
+    FROM habits h
+    LEFT JOIN habit_days hd ON h.id = hd.habitId
+  `);
+
+  const manualTasks = await db.getAllAsync(`
+    SELECT
+      ts.start_minutes AS start_minutes,
+      ts.end_minutes AS end_minutes,
+      ts.date AS date,
+      'task' AS type,
+      t.id AS itemId,
+      t.title AS title
+    FROM task_schedules ts
+    LEFT JOIN tasks t ON ts.taskId = t.id
+    WHERE t.is_auto = 0;
+  `);
+
+  return { recurring, manualTasks };
+};
+
+export const groupBusyBlocks = (recurring, tasks) => {
+  const grouped = {};
+
+  recurring.forEach((row) => {
+    const key = `${row.type}-${row.itemId}`;
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        type: row.type,
+        id: row.itemId,
+        title: row.title,
+        start_minutes: row.start_minutes,
+        end_minutes: row.end_minutes,
+        days: [],
+      };
+    }
+
+    if (!grouped[key].days.includes(row.day)) {
+      grouped[key].days.push(row.day);
+    }
+  });
+
+  tasks.forEach((row) => {
+    const key = `${row.type}-${row.itemId}`;
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        type: row.type,
+        id: row.itemId,
+        title: row.title,
+        start_minutes: [],
+        end_minutes: [],
+        dates: [],
+      };
+    }
+
+    grouped[key].dates.push(row.date);
+    grouped[key].start_minutes.push(row.start_minutes);
+    grouped[key].end_minutes.push(row.end_minutes);
+  });
+
+  return Object.values(grouped);
+};
 
 // ============================================
 // CALENDAR BUILDING
@@ -43,7 +147,6 @@ const expandRecurringItem = ({ calendar, item, startDate, endDate }) => {
 
     const start = item.start_minutes;
     const end = item.end_minutes;
-    // console.log(typeof d);
 
     if (start < end) {
       addBlockToCalendar(calendar, d.toLocaleDateString("sv-SE"), start, end);
@@ -94,11 +197,9 @@ export const buildCalendar = ({ busyItems, scheduleStart, scheduleEnd }) => {
   return calendar;
 };
 
-/**
- * Compute task authority (urgency)
- * Factors: deadline proximity, priority, duration
- * Higher = schedule sooner
- */
+// ============================================
+// AUTHORITY CALCULATION
+// ============================================
 export const computeAuthority = ({
   priority = "Low",
   deadlineDate,
@@ -143,63 +244,18 @@ export const computeAuthority = ({
   return authority;
 };
 
-/**
- * Round duration to human-friendly chunks
- * 30, 40, 45, 50, 60, 75, 90, 120, 150 minutes
- */
-const FRIENDLY_DURATIONS = [30, 40, 45, 50, 60, 75, 90, 120, 150, 180];
-
-export const roundToFriendlyDuration = (available, remaining) => {
-  // Filter ONLY friendly durations <= available
-  const possible = FRIENDLY_DURATIONS.filter(
-    (d) => d <= available && d <= remaining
-  );
-
-  console.log("possible : ", possible);
-
-  if (possible.length === 0) {
-    return available; // Nothing fits
-  }
-
-  // Return largest possible friendly duration
-  return Math.max(...possible);
-};
-
-/**
- * Calculate ideal daily allocation
- * Spreads task across multiple days for better life balance
- */
-const calculateIdealDailyAllocation = (
-  remaining,
-  daysAvailable,
-  minDailyAllocation = 15,
-  maxDailyAllocation = 180
-) => {
-  if (daysAvailable <= 0) return remaining;
-
-  const perDay = remaining / daysAvailable; // days available?
-
-  // If fits in one day comfortably
-  if (perDay <= maxDailyAllocation) {
-    return Math.max(minDailyAllocation, perDay);
-  }
-
-  // Otherwise spread across more days
-  return maxDailyAllocation;
-};
-
-/**
- * Helper: Get free time slots from busy blocks
- */
+// ============================================
+// GET FREE SLOTS
+// ============================================
 export const getFreeSlots = (busyBlocks, currentTimeMinutes = 0) => {
   if (!busyBlocks || busyBlocks.length === 0) {
-    // ✅ Start from currentTimeMinutes, not midnight
+    // Start from currentTimeMinutes, not midnight
     return [{ start: currentTimeMinutes, end: 24 * 60 }];
   }
 
   const sorted = [...busyBlocks].sort((a, b) => a.start - b.start);
   const free = [];
-  let currentFree = Math.max(0, currentTimeMinutes); // ✅ Start from now (15 mins past)
+  let currentFree = Math.max(0, currentTimeMinutes); // Start from now (15 mins past)
 
   for (const block of sorted) {
     // Skip blocks completely before current time
@@ -219,9 +275,9 @@ export const getFreeSlots = (busyBlocks, currentTimeMinutes = 0) => {
   return free.filter((slot) => slot.end - slot.start >= MIN_CHUNK);
 };
 
-/**
- * Auto-schedule tasks with even distribution
- */
+// ============================================
+// AUTO-SCHEDULER
+// ============================================
 export const autoSchedule = ({
   calendar,
   autoTasks,
@@ -229,8 +285,9 @@ export const autoSchedule = ({
   scheduleEnd,
 }) => {
   const results = [];
-  const AUTO_EVENT_BUFFER = 20; // 10 min buffer before auto events
+  const AUTO_EVENT_BUFFER = 20; // 20 min buffer before auto events
   const START_FROM_CURRENT_TIME_BUFFER = 5;
+  const MIN_CHUNK = 15;
 
   // Create mutable calendar copy
   const workingCalendar = { ...calendar };
@@ -238,18 +295,14 @@ export const autoSchedule = ({
     workingCalendar[key] = [...(workingCalendar[key] || [])];
   });
 
-  // console.log("1");
-
   for (const task of autoTasks.sort((a, b) => b.authority - a.authority)) {
     const duration = task.totalMinutes;
-
-    console.log("task : ", task);
 
     const taskDeadline = new Date(task.deadlineDate);
     taskDeadline.setHours(0, 0, 0, 0);
     taskDeadline.setMinutes(task.deadlineMinutes);
 
-    // ✅ Calculate scheduling window
+    // Calculate scheduling window
 
     const now = new Date();
     const daysToDeadline = Math.floor(
@@ -260,16 +313,27 @@ export const autoSchedule = ({
 
     let scheduled = false;
 
-    // ✅ Try days chronologically until deadline
+    const scheduleStartDay = new Date(scheduleStart);
+    scheduleStartDay.setHours(0, 0, 0, 0);
 
+    // Try days chronologically until deadline
     for (
       let d = new Date(scheduleStart);
       d <= taskDeadline && !scheduled;
       d.setDate(d.getDate() + 1)
     ) {
-      const daysFromNow = Math.floor((d - now) / (1000 * 60 * 60 * 24));
-      // ✅ SPREAD: Only schedule within window
-      if (daysFromNow < windowStartDays || daysFromNow > windowEndDays) {
+      const dDay = new Date(d);
+      dDay.setHours(0, 0, 0, 0);
+
+      const daysFromScheduleStart = Math.floor(
+        (dDay - scheduleStartDay) / (1000 * 60 * 60 * 24)
+      );
+
+      // SPREAD: Only schedule within window
+      if (
+        daysFromScheduleStart < windowStartDays ||
+        daysFromScheduleStart > windowEndDays
+      ) {
         continue; // Skip too early/too late
       }
 
@@ -283,20 +347,43 @@ export const autoSchedule = ({
           : 0;
       const busy = workingCalendar[dateKey] || [];
       const freeSlots = getFreeSlots(busy, currentTimeMinutes);
+      console.log("freeSlots : ", freeSlots);
 
-      // ✅ Find ONE slot big enough for entire task
+      // Find ONE slot big enough for entire task
       for (const slot of freeSlots) {
         const slotStart = slot.start + AUTO_EVENT_BUFFER;
         if (slotStart >= 1440) continue;
 
-        // ✅ OVERNIGHT CALCULATION
+        // OVERNIGHT CALCULATION
         const timeIntoNextDay = Math.max(0, slotStart + duration - 1440);
-        const usableDuration = slot.end - slotStart + timeIntoNextDay;
+        const usableDuration = slot.end - slotStart;
+
+        // ✅ CHECK NEXT DAY if overnight
+        if (timeIntoNextDay > 0) {
+          const nextDayKeyObj = new Date(d);
+          nextDayKeyObj.setDate(nextDayKeyObj.getDate() + 1);
+          const nextDayKey = nextDayKeyObj.toLocaleDateString("sv-SE");
+
+          const nextDayBusy = workingCalendar[nextDayKey] || [];
+          const nextDayFreeSlots = getFreeSlots(nextDayBusy);
+
+          // ✅ Must have free slot at midnight next day
+          const midnightFree = nextDayFreeSlots.find(
+            (slot) => slot.start <= 0 && slot.end > timeIntoNextDay
+          );
+
+          if (!midnightFree) {
+            continue; // Next day midnight busy → can't schedule overnight
+          }
+
+          usableDuration += timeIntoNextDay; // ✅ Now safe to add
+        }
+        console.log("usableDuraiton : ", usableDuration);
 
         // Must fit entire task (handle overnight)
         if (usableDuration < duration) continue;
 
-        // ✅ OVERNIGHT DEADLINE CHECK
+        // OVERNIGHT DEADLINE CHECK
         const slotEndTime = slotStart + duration;
         let endDateTime;
 
@@ -321,7 +408,7 @@ export const autoSchedule = ({
           );
         }
 
-        // ✅ SCHEDULE OVERNIGHT TASK
+        // SCHEDULE OVERNIGHT TASK
         if (slotEndTime > 1440) {
           // Split across midnight
           const firstPartDuration = 1440 - slotStart;
@@ -376,10 +463,95 @@ export const autoSchedule = ({
 
     if (!scheduled) {
       throw new Error(
-        `"${task.title}" (${duration}min): No suitable slot found`
+        `No suitable slot found for "${task.title}" before deadline.`
       );
     }
   }
 
   return results;
+};
+
+export const rebalance = async (db, type) => {
+  try {
+    const { recurring, manualTasks } = await loadManualBlocks(db);
+    const busyItems = groupBusyBlocks(recurring, manualTasks);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const maxEnd = new Date(today);
+    maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
+    const scheduleEnd = maxEnd;
+
+    let existingAutoTasks = [];
+
+    existingAutoTasks = await db.getAllAsync(`
+      SELECT * FROM tasks
+      WHERE is_auto = 1 AND total_duration > 0  
+    `);
+
+    const mappedAutoTasks = existingAutoTasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      totalMinutes: t.total_duration,
+      priority: t.priority,
+      deadlineDate: t.deadline_date,
+      deadlineMinutes: t.deadline_minutes,
+      authority: computeAuthority({
+        priority: t.priority || "Low",
+        deadlineDate: t.deadline_date,
+        deadlineMinutes: t.deadline_minutes || 0,
+        duration_left: t.total_duration,
+      }),
+    }));
+
+    const calendar = buildCalendar({
+      busyItems: busyItems,
+      scheduleStart: today,
+      scheduleEnd,
+    });
+
+    console.log("calendar : ", calendar);
+
+    const scheduledResults = autoSchedule({
+      calendar,
+      autoTasks: mappedAutoTasks.sort((a, b) => b.authority - a.authority),
+      scheduleStart: today,
+      scheduleEnd,
+    });
+
+    // =====  CLEAR AUTO SCHEDULES =====
+    const taskIds = mappedAutoTasks.map((t) => t.id);
+
+    if (taskIds.length > 0) {
+      await db.runAsync(
+        `DELETE FROM task_schedules
+        WHERE taskId IN (${taskIds.map(() => "?").join(",")})`,
+        taskIds
+      );
+    }
+
+    for (const s of scheduledResults) {
+      await db.runAsync(
+        `INSERT INTO task_schedules
+        (taskId, date, start_minutes, end_minutes, duration)
+        VALUES (?, ?, ?, ?, ?)`,
+        [
+          s.taskId,
+          s.date,
+          s.start_minutes,
+          s.end_minutes,
+          s.end_minutes - s.start_minutes,
+        ]
+      );
+    }
+  } catch (err) {
+    if (type !== "rebalance") {
+      throw new Error(
+        `Due to this ${type} some tasks will not meet their deadline.`
+      );
+    } else {
+      throw new Error(`Rebalance failed.`);
+    }
+  }
 };

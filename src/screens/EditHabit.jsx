@@ -13,6 +13,12 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useState } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSQLiteContext } from "expo-sqlite";
+import {
+  intervalsOverlap,
+  groupBusyBlocks,
+  loadManualBlocks,
+  rebalance,
+} from "../utils/scheduling.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -89,73 +95,6 @@ export default function EditHabit() {
     }
   };
 
-  const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
-    const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
-
-    const aCross = aStart > aEnd; // crosses midnight
-    const bCross = bStart > bEnd; // crosses midnight
-
-    if (!aCross && !bCross) {
-      return check(aStart, aEnd, bStart, bEnd);
-    }
-
-    if (aCross && bCross) {
-      return true; // both span midnight → guaranteed overlap
-    }
-
-    if (aCross) {
-      return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
-    }
-
-    if (bCross) {
-      return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
-    }
-  };
-
-  const groupBusyBlocks = (recurring, tasks) => {
-    const grouped = {};
-
-    recurring.forEach((row) => {
-      const key = `${row.type}-${row.itemId}`;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          type: row.type,
-          id: row.itemId,
-          title: row.title,
-          start_minutes: row.start_minutes,
-          end_minutes: row.end_minutes,
-          days: [],
-        };
-      }
-
-      if (!grouped[key].days.includes(row.day)) {
-        grouped[key].days.push(row.day);
-      }
-    });
-
-    tasks.forEach((row) => {
-      const key = `${row.type}-${row.itemId}`;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          type: row.type,
-          id: row.itemId,
-          title: row.title,
-          start_minutes: [],
-          end_minutes: [],
-          dates: [],
-        };
-      }
-
-      grouped[key].dates.push(row.date);
-      grouped[key].start_minutes.push(row.start_minutes);
-      grouped[key].end_minutes.push(row.end_minutes);
-    });
-
-    return Object.values(grouped);
-  };
-
   const findConflict = ({ items, startM, endM }) => {
     for (let item of items) {
       // Skip self when editing habit
@@ -201,6 +140,8 @@ export default function EditHabit() {
 
   const validateAndSave = async () => {
     try {
+      await db.runAsync("BEGIN TRANSACTION");
+
       /* ---------- BASIC VALIDATION ---------- */
       if (!habitName.trim()) {
         return Alert.alert("Missing Name", "Please enter a habit name.");
@@ -214,44 +155,8 @@ export default function EditHabit() {
       const endM = endMinutes;
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
-      const routinesAndHabits = await db.getAllAsync(`
-        SELECT 
-          r.start_minutes AS start_minutes,
-          r.end_minutes AS end_minutes,
-          d.day AS day,
-          'routine' AS type,
-          r.id AS itemId,
-          r.title AS title
-        FROM routines r
-        LEFT JOIN routine_days d ON r.id = d.routineId
-
-        UNION ALL
-
-        SELECT 
-          h.start_minutes AS start_minutes,
-          h.end_minutes AS end_minutes,
-          hd.day AS day,
-          'habit' AS type,
-          h.id AS itemId,
-          h.title AS title
-        FROM habits h
-        LEFT JOIN habit_days hd ON h.id = hd.habitId
-      `);
-
-      const manualTasks = await db.getAllAsync(`
-        SELECT
-          ts.start_minutes AS start_minutes,
-          ts.end_minutes AS end_minutes,
-          ts.date AS date,
-          'task' AS type,
-          t.id AS itemId,
-          t.title AS title
-        FROM task_schedules ts
-        LEFT JOIN tasks t ON ts.taskId = t.id
-        WHERE t.is_auto = 0;
-      `);
-
-      const busyItems = groupBusyBlocks(routinesAndHabits, manualTasks);
+      const { recurring, manualTasks } = await loadManualBlocks(db);
+      const busyItems = groupBusyBlocks(recurring, manualTasks);
 
       /* ---------- CONFLICT CHECK ---------- */
       const conflict = findConflict({ items: busyItems, startM, endM });
@@ -307,10 +212,16 @@ export default function EditHabit() {
         }
       }
 
+      //REBALANCE
+      await rebalance(db, "habit");
+
+      await db.runAsync("COMMIT");
+
       console.log("Habit saved successfully.");
       navigation.goBack();
     } catch (err) {
-      console.error("validateAndSave (habit) error:", err);
+      await db.runAsync("ROLLBACK");
+      // console.error("validateAndSave (habit) error:", err);
       Alert.alert(
         "Save Failed",
         err?.message || "Something went wrong while saving the habit."
