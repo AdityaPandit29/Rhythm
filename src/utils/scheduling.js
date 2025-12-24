@@ -122,6 +122,29 @@ export const groupBusyBlocks = (recurring, tasks) => {
     grouped[key].end_minutes.push(row.end_minutes);
   });
 
+  // // ---------- sort per group ----------
+  // for (const item of Object.values(grouped)) {
+  //   // recurring sort
+  //   if (item.type !== "task") {
+  //     if (Array.isArray(item.days)) item.days.sort((a, b) => a - b); // numeric [web:695]
+  //     continue;
+  //   }
+
+  //   // task sort: sort triples together
+  //   const zipped = item.dates.map((date, i) => ({
+  //     date,
+  //     start: item.start_minutes[i],
+  //     end: item.end_minutes[i],
+  //   }));
+
+  //   // If dates are ISO (YYYY-MM-DD), string sort works reliably. [web:699]
+  //   zipped.sort((a, b) => (a.date === b.date ? a.start - b.start : a.date > b.date ? 1 : -1)); [web:695][web:699]
+
+  //   item.dates = zipped.map((x) => x.date);
+  //   item.start_minutes = zipped.map((x) => x.start);
+  //   item.end_minutes = zipped.map((x) => x.end);
+  // }
+
   return Object.values(grouped);
 };
 
@@ -347,7 +370,6 @@ export const autoSchedule = ({
           : 0;
       const busy = workingCalendar[dateKey] || [];
       const freeSlots = getFreeSlots(busy, currentTimeMinutes);
-      console.log("freeSlots : ", freeSlots);
 
       // Find ONE slot big enough for entire task
       for (const slot of freeSlots) {
@@ -378,7 +400,6 @@ export const autoSchedule = ({
 
           usableDuration += timeIntoNextDay; // ✅ Now safe to add
         }
-        console.log("usableDuraiton : ", usableDuration);
 
         // Must fit entire task (handle overnight)
         if (usableDuration < duration) continue;
@@ -510,8 +531,6 @@ export const rebalance = async (db, type) => {
       scheduleStart: today,
       scheduleEnd,
     });
-
-    console.log("calendar : ", calendar);
 
     const scheduledResults = autoSchedule({
       calendar,

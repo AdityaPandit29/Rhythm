@@ -2,90 +2,222 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useState } from "react";
+import { groupBusyBlocks } from "../utils/scheduling.js";
+import { useSQLiteContext } from "expo-sqlite";
+
+const loadAllBlocks = async (db) => {
+  const recurring = await db.getAllAsync(`
+    SELECT 
+      r.start_minutes AS start_minutes,
+      r.end_minutes AS end_minutes,
+      d.day AS day,
+      'routine' AS type,
+      r.id AS itemId,
+      r.title AS title
+    FROM routines r
+    LEFT JOIN routine_days d ON r.id = d.routineId
+
+    UNION ALL
+
+    SELECT 
+      h.start_minutes AS start_minutes,
+      h.end_minutes AS end_minutes,
+      hd.day AS day,
+      'habit' AS type,
+      h.id AS itemId,
+      h.title AS title
+    FROM habits h
+    LEFT JOIN habit_days hd ON h.id = hd.habitId
+  `);
+
+  const tasks = await db.getAllAsync(`
+    SELECT
+      ts.start_minutes AS start_minutes,
+      ts.end_minutes AS end_minutes,
+      ts.date AS date,
+      'task' AS type,
+      t.id AS itemId,
+      t.title AS title
+    FROM task_schedules ts
+    LEFT JOIN tasks t ON ts.taskId = t.id
+    WHERE (is_auto == 1 AND t.total_duration != 0) OR (is_auto == 0);
+  `);
+
+  return { recurring, tasks };
+};
+
+const isTimeInRange = (nowMin, start, end) => {
+  // normal (same day)
+  if (start <= end) {
+    return nowMin >= start && nowMin < end;
+  }
+
+  // overnight (e.g. 1300 → 500)
+  return nowMin >= start || nowMin < end;
+};
+
+const getCurrentBlock = (blocks) => {
+  const now = new Date();
+  const todayKey = now.toLocaleDateString("sv-SE");
+  const todayDayIndex = now.getDay(); // 0–6
+  const yesterdayDayIndex = (todayDayIndex + 6) % 7;
+  const minutesNow = now.getHours() * 60 + now.getMinutes();
+
+  let closestUpcoming = null;
+
+  for (const block of blocks) {
+    // =============================
+    // HABITS & ROUTINES (recurring)
+    // =============================
+    if (block.type !== "task") {
+      const overnight = block.start_minutes > block.end_minutes;
+
+      const isValidDay =
+        block.days.includes(todayDayIndex) ||
+        (overnight && block.days.includes(yesterdayDayIndex));
+
+      if (!isValidDay) continue;
+
+      // ONGOING
+      if (isTimeInRange(minutesNow, block.start_minutes, block.end_minutes)) {
+        return {
+          status: "ongoing",
+          type: block.type,
+          title: block.title,
+          start_minutes: block.start_minutes,
+          end_minutes: block.end_minutes,
+        };
+      }
+
+      // UPCOMING (only for today's start)
+      if (block.days.includes(todayDayIndex)) {
+        const diff = block.start_minutes - minutesNow;
+        if (diff > 0 && diff <= 10) {
+          if (!closestUpcoming || diff < closestUpcoming.diff) {
+            closestUpcoming = {
+              status: "upcoming",
+              type: block.type,
+              title: block.title,
+              start_minutes: block.start_minutes,
+              diff,
+            };
+          }
+        }
+      }
+    }
+
+    // =============================
+    // TASKS (date-based, already split)
+    // =============================
+    else {
+      block.dates.forEach((date, i) => {
+        if (date !== todayKey) return;
+
+        const start = block.start_minutes[i];
+        const end = block.end_minutes[i];
+
+        // ONGOING
+        if (minutesNow >= start && minutesNow < end) {
+          closestUpcoming = {
+            status: "ongoing",
+            type: "task",
+            title: block.title,
+            start_minutes: start,
+            end_minutes: end,
+          };
+        }
+
+        // UPCOMING
+        const diff = start - minutesNow;
+        if (diff > 0 && diff <= 10) {
+          if (!closestUpcoming || diff < closestUpcoming.diff) {
+            closestUpcoming = {
+              status: "upcoming",
+              type: "task",
+              title: block.title,
+              start_minutes: start,
+              diff,
+            };
+          }
+        }
+      });
+
+      if (closestUpcoming?.status === "ongoing") return closestUpcoming;
+    }
+  }
+
+  return closestUpcoming || { status: "free" };
+};
+
+const formatMinutes = (mins) => {
+  const h = String(Math.floor(mins / 60)).padStart(2, "0");
+  const m = String(mins % 60).padStart(2, "0");
+  return `${h}:${m}`;
+};
 
 export default function Dashboard() {
-  /* ----------------------------------------------------
-     Dummy Event + Free Time Example
-  ---------------------------------------------------- */
-  const now = new Date();
-  const nextEventTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hrs later
+  const db = useSQLiteContext();
 
-  const [event, setEvent] = useState({
-    title: "Math Assignment",
-    type: "task", // habit | routine | task
-    startTime: nextEventTime,
-    endTime: new Date(nextEventTime.getTime() + 60 * 60 * 1000),
-    duration: 60,
-    status: "upcoming",
-  });
+  const [blocks, setBlocks] = useState([]);
+  const [currentBlock, setCurrentBlock] = useState(null);
 
-  /* A zero-duration task for free-time suggestions */
-  const zeroDurationTask = {
-    title: "Email Cleanup",
-    duration: 0,
-  };
+  const block = currentBlock ?? { status: "free" };
 
-  const [timer, setTimer] = useState("00:00:00");
-
-  /* ----------------------------------------------------
-     TIMER LOGIC → Runs every second
-  ---------------------------------------------------- */
   useEffect(() => {
-    const interval = setInterval(() => updateTimer(), 1000);
-    return () => clearInterval(interval);
-  }, [event]);
+    let cancelled = false;
 
-  const updateTimer = () => {
+    const load = async () => {
+      try {
+        const { recurring, tasks } = await loadAllBlocks(db);
+        const grouped = groupBusyBlocks(recurring, tasks);
+
+        console.log("grouped : ", grouped);
+
+        if (!cancelled) {
+          setCurrentBlock(getCurrentBlock(grouped));
+        }
+      } catch (err) {
+        console.error("Dashboard load error:", err);
+      }
+    };
+
+    load();
+
+    const interval = setInterval(load, 60 * 1000); // re-check every minute
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // console.log("currentBlock : ", currentBlock);
+  // console.log("block : ", block);
+
+  const statusMap = {
+    ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },
+    upcoming: { bg: "#5CCF5C20", color: "#9b512eff", label: "Starting Soon" },
+    free: { bg: "#DDD", color: "#555", label: "Free Time" },
+  };
+
+  const status = statusMap[block.status] || statusMap.free;
+
+  let mainTime = "00:00";
+
+  if (block.status === "ongoing") {
     const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const remaining =
+      block.end_minutes >= block.start_minutes
+        ? block.end_minutes - nowMin
+        : 1440 - nowMin + block.end_minutes;
 
-    if (now < event.startTime) {
-      // UPCOMING EVENT
-      setEvent((e) => ({ ...e, status: "upcoming" }));
-      setTimer(formatTime(event.startTime - now));
-    } else if (now >= event.startTime && now <= event.endTime) {
-      // ONGOING
-      setEvent((e) => ({ ...e, status: "ongoing" }));
-      setTimer(formatTime(event.endTime - now));
-    } else {
-      // OVERTIME
-      setEvent((e) => ({ ...e, status: "overtime" }));
-      setTimer(formatTime(now - event.endTime));
-    }
-  };
+    mainTime = formatMinutes(Math.max(0, remaining));
+  }
 
-  const formatTime = (ms) => {
-    const sec = Math.floor(ms / 1000);
-    const h = String(Math.floor(sec / 3600)).padStart(2, "0");
-    const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
-    const s = String(sec % 60).padStart(2, "0");
-    return `${h}:${m}:${s}`;
-  };
-
-  /* ----------------------------------------------------
-     STATUS COLORS + LABELS
-  ---------------------------------------------------- */
-  const getStatusStyle = () => {
-    switch (event.status) {
-      case "upcoming":
-        return { bg: "#5CCF5C20", color: "#2E9B2E", label: "Upcoming" };
-      case "ongoing":
-        return { bg: "#3498db20", color: "#2980b9", label: "Ongoing" };
-      case "overtime":
-        return { bg: "#FF555520", color: "#FF5555", label: "Overtime" };
-      default:
-        return { bg: "#DDD", color: "#333", label: "Unknown" };
-    }
-  };
-  const status = getStatusStyle();
-
-  /* ----------------------------------------------------
-     CHECK IF USER HAS FREE TIME
-  ---------------------------------------------------- */
-  const timeUntilNextEvent = event.startTime - now;
-  const hasFreeTime = timeUntilNextEvent > 45 * 60 * 1000; // >45min gap
-
-  const showFreeTimeCard =
-    hasFreeTime && zeroDurationTask && zeroDurationTask.duration === 0;
+  if (block.status === "upcoming") {
+    mainTime = `${block.diff} min`;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -109,17 +241,6 @@ export default function Dashboard() {
            CARD 1: NEXT EVENT CARD
         ---------------------------------------------------- */}
         <View style={styles.mainEventCard}>
-          <Text style={styles.cardTitle}>Next Event</Text>
-
-          {/* TIMER */}
-          <Text style={styles.mainTime}>{timer}</Text>
-
-          {/* EVENT NAME + TYPE */}
-          <Text style={styles.subText}>
-            {event.type.charAt(0).toUpperCase() + event.type.slice(1)}:{" "}
-            {event.title}
-          </Text>
-
           {/* STATUS */}
           <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
             <Text style={[styles.statusText, { color: status.color }]}>
@@ -127,50 +248,20 @@ export default function Dashboard() {
             </Text>
           </View>
 
+          <Text style={styles.mainTime}>{mainTime}</Text>
+
+          <Text style={styles.subText}>
+            {block.status === "free"
+              ? "No ongoing event"
+              : `${block.type.toUpperCase()}: ${block.title}`}
+          </Text>
+
           {/* ACTION BUTTONS */}
-          <View style={styles.actionRow}>
+          {block.status === "ongoing" && (
             <TouchableOpacity style={styles.doneBtn}>
-              <Text style={styles.btnText}>Done</Text>
+              <Text style={styles.btnText}>Mark Done</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.leaveBtn}>
-              <Text style={styles.btnText}>Leave</Text>
-            </TouchableOpacity>
-
-            {event.type === "task" && (
-              <TouchableOpacity style={styles.rescheduleBtn}>
-                <Text style={styles.btnText}>Reschedule</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* ----------------------------------------------------
-           CARD 2: FREE TIME CARD
-        ---------------------------------------------------- */}
-        {showFreeTimeCard && (
-          <View style={styles.freeTimeCard}>
-            <Text style={styles.freeTimeTitle}>Free Time Available</Text>
-
-            <Text style={styles.freeTimeSubtitle}>
-              You can complete this quick task now:
-            </Text>
-
-            <Text style={styles.freeTaskName}>• {zeroDurationTask.title}</Text>
-
-            <TouchableOpacity style={styles.startNowBtn}>
-              <Text style={styles.startNowText}>Start Now</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* TODAY SCORE */}
-        <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>Today’s Score: 64%</Text>
-
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: "64%" }]} />
-          </View>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -246,7 +337,6 @@ const styles = StyleSheet.create({
     color: "#555",
   },
   statusPill: {
-    marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,

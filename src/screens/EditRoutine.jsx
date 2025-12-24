@@ -135,7 +135,6 @@ export default function EditRoutine() {
 
   const validateAndSave = async () => {
     try {
-      await db.runAsync("BEGIN TRANSACTION");
       if (!label.trim()) {
         return Alert.alert("Missing Name", "Please enter a routine name.");
       }
@@ -160,6 +159,7 @@ export default function EditRoutine() {
           `This routine overlaps with ${conflict.type}: "${conflict.title}".`
         );
       }
+      await db.runAsync("BEGIN TRANSACTION");
 
       // --- SAVE ROUTINE ---
       if (mode === "add") {

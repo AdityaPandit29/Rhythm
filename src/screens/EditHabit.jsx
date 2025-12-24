@@ -36,13 +36,6 @@ export default function EditHabit() {
   const [habitName, setHabitName] = useState(existing?.habitName ?? "");
   const [days, setDays] = useState(existing?.days ?? Array(7).fill(false));
 
-  // const [startTime, setStartTime] = useState(
-  //   existing.startTime ?? new Date(new Date().setHours(18, 0, 0, 0))
-  // );
-  // const [endTime, setEndTime] = useState(
-  //   existing.endTime ?? new Date(new Date().setHours(19, 0, 0, 0))
-  // );
-
   const [startMinutes, setStartMinutes] = useState(
     existing?.startMinutes ?? 1080
   );
@@ -140,8 +133,6 @@ export default function EditHabit() {
 
   const validateAndSave = async () => {
     try {
-      await db.runAsync("BEGIN TRANSACTION");
-
       /* ---------- BASIC VALIDATION ---------- */
       if (!habitName.trim()) {
         return Alert.alert("Missing Name", "Please enter a habit name.");
@@ -157,6 +148,7 @@ export default function EditHabit() {
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const { recurring, manualTasks } = await loadManualBlocks(db);
       const busyItems = groupBusyBlocks(recurring, manualTasks);
+      console.log("busyItems : ", busyItems);
 
       /* ---------- CONFLICT CHECK ---------- */
       const conflict = findConflict({ items: busyItems, startM, endM });
@@ -166,6 +158,7 @@ export default function EditHabit() {
           `This habit overlaps with ${conflict.type}: "${conflict.title}".`
         );
       }
+      await db.runAsync("BEGIN TRANSACTION");
 
       /* ---------- SAVE HABIT ---------- */
       if (mode === "add") {
@@ -213,6 +206,7 @@ export default function EditHabit() {
       }
 
       //REBALANCE
+      console.log("ADDS");
       await rebalance(db, "habit");
 
       await db.runAsync("COMMIT");

@@ -556,7 +556,7 @@ export default function EditTask() {
           }
 
           /* ---------- INSERT MANUAL SCHEDULES ---------- */
-          if (endM <= startM) {
+          if (endM <= startM && endM !== 0) {
             await db.runAsync(
               `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
