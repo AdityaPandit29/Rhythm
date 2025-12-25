@@ -142,13 +142,17 @@ export default function EditHabit() {
         return Alert.alert("Missing Days", "Please select at least one day.");
       }
 
+      if (startMinutes === endMinutes) {
+        return Alert.alert("Time Error", "Start and end time cannot be same.");
+      }
+
       const startM = startMinutes;
       const endM = endMinutes;
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const { recurring, manualTasks } = await loadManualBlocks(db);
       const busyItems = groupBusyBlocks(recurring, manualTasks);
-      console.log("busyItems : ", busyItems);
+      console.log("busyygchgc", busyItems);
 
       /* ---------- CONFLICT CHECK ---------- */
       const conflict = findConflict({ items: busyItems, startM, endM });
@@ -206,7 +210,6 @@ export default function EditHabit() {
       }
 
       //REBALANCE
-      console.log("ADDS");
       await rebalance(db, "habit");
 
       await db.runAsync("COMMIT");

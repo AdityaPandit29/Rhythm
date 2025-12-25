@@ -4,6 +4,8 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useState } from "react";
 import { groupBusyBlocks } from "../utils/scheduling.js";
 import { useSQLiteContext } from "expo-sqlite";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
 
 const loadAllBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
@@ -70,38 +72,44 @@ const getCurrentBlock = (blocks) => {
     // HABITS & ROUTINES (recurring)
     // =============================
     if (block.type !== "task") {
-      const overnight = block.start_minutes > block.end_minutes;
+      const start = block.start_minutes;
+      const end = block.end_minutes;
 
-      const isValidDay =
+      const isOvernight = end < start;
+
+      const todayAllowed =
         block.days.includes(todayDayIndex) ||
-        (overnight && block.days.includes(yesterdayDayIndex));
+        (isOvernight && block.days.includes(yesterdayDayIndex));
 
-      if (!isValidDay) continue;
+      if (!todayAllowed) continue;
+
+      // Normalize timeline
+      const adjustedEnd = isOvernight ? end + 1440 : end;
+      const adjustedNow =
+        minutesNow < start && isOvernight ? minutesNow + 1440 : minutesNow;
 
       // ONGOING
-      if (isTimeInRange(minutesNow, block.start_minutes, block.end_minutes)) {
+      if (adjustedNow >= start && adjustedNow < adjustedEnd) {
         return {
           status: "ongoing",
           type: block.type,
           title: block.title,
-          start_minutes: block.start_minutes,
-          end_minutes: block.end_minutes,
+          start_minutes: start,
+          end_minutes: adjustedEnd % 1440,
         };
       }
 
-      // UPCOMING (only for today's start)
-      if (block.days.includes(todayDayIndex)) {
-        const diff = block.start_minutes - minutesNow;
-        if (diff > 0 && diff <= 10) {
-          if (!closestUpcoming || diff < closestUpcoming.diff) {
-            closestUpcoming = {
-              status: "upcoming",
-              type: block.type,
-              title: block.title,
-              start_minutes: block.start_minutes,
-              diff,
-            };
-          }
+      // UPCOMING (only if start is ahead)
+      const diff = start - minutesNow;
+      if (diff > 0 && diff <= 10 && block.days.includes(todayDayIndex)) {
+        if (!closestUpcoming || diff < closestUpcoming.diff) {
+          closestUpcoming = {
+            status: "upcoming",
+            type: block.type,
+            title: block.title,
+            start_minutes: start,
+            diff,
+          };
         }
       }
     }
@@ -118,12 +126,31 @@ const getCurrentBlock = (blocks) => {
 
         // ONGOING
         if (minutesNow >= start && minutesNow < end) {
+          let mergedStart = start;
+          let mergedEnd = end;
+
+          // check yesterday continuation
+          const yesterdayKey = new Date(
+            Date.now() - 24 * 60 * 60 * 1000
+          ).toLocaleDateString("sv-SE");
+
+          block.dates.forEach((d, j) => {
+            if (
+              d === yesterdayKey &&
+              block.end_minutes[j] === 1440 && // ended at midnight
+              start === 0 // today's part starts at midnight
+            ) {
+              mergedStart = block.start_minutes[j];
+              mergedEnd = end + 1440; // logical full span
+            }
+          });
+
           closestUpcoming = {
             status: "ongoing",
             type: "task",
             title: block.title,
-            start_minutes: start,
-            end_minutes: end,
+            start_minutes: mergedStart,
+            end_minutes: mergedEnd % 1440,
           };
         }
 
@@ -146,6 +173,8 @@ const getCurrentBlock = (blocks) => {
     }
   }
 
+  console.log("closestUpcoming : ", closestUpcoming);
+
   return closestUpcoming || { status: "free" };
 };
 
@@ -161,42 +190,48 @@ export default function Dashboard() {
   const [blocks, setBlocks] = useState([]);
   const [currentBlock, setCurrentBlock] = useState(null);
 
+  const load = useCallback(async () => {
+    const { recurring, tasks } = await loadAllBlocks(db);
+    const grouped = groupBusyBlocks(recurring, tasks);
+    // console.log("currentBlock : ", getCurrentBlock(grouped));
+    console.log("grouped : ", grouped);
+
+    setBlocks(grouped);
+    setCurrentBlock(getCurrentBlock(grouped));
+    console.log("currentBlock : ", currentBlock);
+  }, [db]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const run = async () => {
+        try {
+          if (!cancelled) await load();
+        } catch (err) {
+          console.error("Dashboard load error:", err);
+        }
+      };
+
+      run(); // refresh immediately on navigate/focus [web:41]
+
+      const interval = setInterval(run, 60 * 1000); // refresh every minute while focused [web:41]
+
+      return () => {
+        cancelled = true;
+        clearInterval(interval); // cleanup happens on blur/unmount [web:41]
+      };
+    }, [load])
+  );
+
   const block = currentBlock ?? { status: "free" };
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const { recurring, tasks } = await loadAllBlocks(db);
-        const grouped = groupBusyBlocks(recurring, tasks);
-
-        console.log("grouped : ", grouped);
-
-        if (!cancelled) {
-          setCurrentBlock(getCurrentBlock(grouped));
-        }
-      } catch (err) {
-        console.error("Dashboard load error:", err);
-      }
-    };
-
-    load();
-
-    const interval = setInterval(load, 60 * 1000); // re-check every minute
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
   // console.log("currentBlock : ", currentBlock);
-  // console.log("block : ", block);
+  console.log("block : ", block);
 
   const statusMap = {
     ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },
-    upcoming: { bg: "#5CCF5C20", color: "#9b512eff", label: "Starting Soon" },
+    upcoming: { bg: "#5CCF5C20", color: "#9b512eff", label: "Starting in" },
     free: { bg: "#DDD", color: "#555", label: "Free Time" },
   };
 
@@ -224,18 +259,18 @@ export default function Dashboard() {
       {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Dashboard</Text>
-        <TouchableOpacity style={styles.settingsBtn}>
+        {/* <TouchableOpacity style={styles.settingsBtn}>
           <MaterialCommunityIcons name="cog-outline" size={22} color="#444" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       <View style={styles.contentWrapper}>
         {/* Quote */}
-        <View style={styles.quoteContainer}>
+        {/* <View style={styles.quoteContainer}>
           <Text style={styles.quoteText}>
             “Small progress is still progress.”
           </Text>
-        </View>
+        </View> */}
 
         {/* ----------------------------------------------------
            CARD 1: NEXT EVENT CARD
@@ -257,11 +292,11 @@ export default function Dashboard() {
           </Text>
 
           {/* ACTION BUTTONS */}
-          {block.status === "ongoing" && (
+          {/* {block.status === "ongoing" && (
             <TouchableOpacity style={styles.doneBtn}>
               <Text style={styles.btnText}>Mark Done</Text>
             </TouchableOpacity>
-          )}
+          )} */}
         </View>
       </View>
     </SafeAreaView>

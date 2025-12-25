@@ -133,7 +133,8 @@ export default function TaskCard({
                 scheduledDate: scheduledDates[0],
                 durationLeft: durationLeft,
                 startMinutes: startMinutes[0],
-                endMinutes: endMinutes[0],
+                endMinutes:
+                  endMinutes.length > 1 ? endMinutes[1] : endMinutes[0],
               },
             })
           }
@@ -156,7 +157,9 @@ export default function TaskCard({
           </Text>
           <Text style={styles.schedule}>
             {minutesToTimeAMPM(startMinutes[0])} -{" "}
-            {minutesToTimeAMPM(endMinutes[0])}
+            {minutesToTimeAMPM(
+              endMinutes.length > 1 ? endMinutes[1] : endMinutes[0]
+            )}
           </Text>
         </>
       )}

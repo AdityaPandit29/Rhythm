@@ -71,7 +71,7 @@ export default function DatabaseSetup() {
       `);
 
       const res = await db.getAllAsync(`
-        SELECT * FROM tasks;
+        SELECT * FROM habits;
       `);
 
       const pes = await db.getAllAsync(`

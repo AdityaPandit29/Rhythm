@@ -90,6 +90,98 @@ export default function EditRoutine() {
     }
   };
 
+  //   const DAY_MIN = 1440;
+
+  // const getRanges = (dayIndex, start, end) => {
+  //   if (end >= start) {
+  //     return [
+  //       {
+  //         start: dayIndex * DAY_MIN + start,
+  //         end: dayIndex * DAY_MIN + end,
+  //       },
+  //     ];
+  //   }
+
+  //   // Overnight → split into two ranges
+  //   return [
+  //     {
+  //       start: dayIndex * DAY_MIN + start,
+  //       end: dayIndex * DAY_MIN + DAY_MIN,
+  //     },
+  //     {
+  //       start: (dayIndex + 1) * DAY_MIN,
+  //       end: (dayIndex + 1) * DAY_MIN + end,
+  //     },
+  //   ];
+  // };
+
+  // const isOverlap = (a, b) => a.start < b.end && b.start < a.end;
+
+  // const findConflict = ({ items, startM, endM }) => {
+  //   for (let item of items) {
+  //     // Skip self while editing
+  //     if (
+  //       mode === "edit" &&
+  //       item.type === "habit" &&
+  //       item.id === existing?.id
+  //     ) {
+  //       continue;
+  //     }
+
+  //     // ----------------------------
+  //     // TASKS (date based)
+  //     // ----------------------------
+  //     if (item.type === "task") {
+  //       for (let i = 0; i < item.dates.length; i++) {
+  //         const dayIndex = new Date(item.dates[i]).getDay();
+
+  //         if (!days[dayIndex]) continue;
+
+  //         const newRanges = getRanges(dayIndex, startM, endM);
+  //         const existingRanges = getRanges(
+  //           dayIndex,
+  //           item.start_minutes[i],
+  //           item.end_minutes[i]
+  //         );
+
+  //         for (const a of newRanges) {
+  //           for (const b of existingRanges) {
+  //             if (isOverlap(a, b)) {
+  //               return { type: item.type, title: item.title };
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     // ----------------------------
+  //     // HABITS / ROUTINES
+  //     // ----------------------------
+  //     else {
+  //       for (const dayIndex of item.days) {
+  //         if (!days[dayIndex]) continue;
+
+  //         const newRanges = getRanges(dayIndex, startM, endM);
+  //         const existingRanges = getRanges(
+  //           dayIndex,
+  //           item.start_minutes,
+  //           item.end_minutes
+  //         );
+
+  //         for (const a of newRanges) {
+  //           for (const b of existingRanges) {
+  //             if (isOverlap(a, b)) {
+  //               return { type: item.type, title: item.title };
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   return null;
+  // };
+
   const findConflict = ({ items, startM, endM }) => {
     for (let item of items) {
       // Skip self when editing habit
@@ -141,6 +233,10 @@ export default function EditRoutine() {
 
       if (!days.some((d) => d)) {
         return Alert.alert("Missing Days", "Please select at least one day.");
+      }
+
+      if (startMinutes === endMinutes) {
+        return Alert.alert("Time Error", "Start and end time cannot be same.");
       }
 
       const startM = startMinutes;

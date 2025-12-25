@@ -556,7 +556,7 @@ export default function EditTask() {
           }
 
           /* ---------- INSERT MANUAL SCHEDULES ---------- */
-          if (endM <= startM && endM !== 0) {
+          if (endM <= startM) {
             await db.runAsync(
               `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
@@ -931,7 +931,7 @@ export default function EditTask() {
         {renderPickerModal(
           showHourModal,
           setShowHourModal,
-          [...Array(13).keys()], // 0–12 hours
+          [...Array(3).keys()], // 0–12 hours
           setSelectedHours
         )}
 
