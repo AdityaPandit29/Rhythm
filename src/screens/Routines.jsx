@@ -23,28 +23,36 @@ export default function Routines() {
     try {
       // Fetch routines
       const routineRows = await db.getAllAsync(`
-        SELECT * FROM routines ORDER BY id DESC;
-      `);
+      SELECT * FROM routines ORDER BY id DESC;
+    `);
 
-      // Fetch days separately
-      const daysRows = await db.getAllAsync(`
-        SELECT routineId, day FROM routine_days;
-      `);
+      // Fetch all schedules
+      const scheduleRows = await db.getAllAsync(`
+      SELECT routineId, day, start_minutes, end_minutes
+      FROM routine_schedules
+      ORDER BY routineId, day, start_minutes;
+    `);
 
-      // Convert days to a structure like: { 1: [0,1], 2:[5], ... }
-      const dayMap = {};
-      for (let row of daysRows) {
-        if (!dayMap[row.routineId]) dayMap[row.routineId] = [];
-        dayMap[row.routineId].push(row.day);
+      // Build map: routineId -> intervals[]
+      const scheduleMap = {};
+
+      for (const row of scheduleRows) {
+        if (!scheduleMap[row.routineId]) {
+          scheduleMap[row.routineId] = [];
+        }
+
+        scheduleMap[row.routineId].push({
+          day: row.day,
+          start: row.start_minutes,
+          end: row.end_minutes,
+        });
       }
 
-      // Merge routines + days into final list
+      // Merge routines + schedules
       const finalList = routineRows.map((r) => ({
         id: r.id,
         name: r.title,
-        startMinutes: r.start_minutes,
-        endMinutes: r.end_minutes,
-        daysSelected: dayMap[r.id] || [], // e.g. [1,3]
+        intervals: scheduleMap[r.id] || [],
       }));
 
       setRoutines(finalList);
@@ -84,9 +92,10 @@ export default function Routines() {
             key={r.id}
             id={r.id}
             name={r.name}
-            startMinutes={r.startMinutes}
-            endMinutes={r.endMinutes}
-            daysSelected={r.daysSelected}
+            intervals={r.intervals}
+            // startMinutes={r.startMinutes}
+            // endMinutes={r.endMinutes}
+            // daysSelected={r.daysSelected}
             onDeleted={loadRoutines}
           />
         ))}

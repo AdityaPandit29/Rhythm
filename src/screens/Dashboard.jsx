@@ -9,7 +9,7 @@ import { useCallback } from "react";
 
 const loadAllBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
-    SELECT 
+    SELECT
       r.start_minutes AS start_minutes,
       r.end_minutes AS end_minutes,
       d.day AS day,
@@ -21,7 +21,7 @@ const loadAllBlocks = async (db) => {
 
     UNION ALL
 
-    SELECT 
+    SELECT
       h.start_minutes AS start_minutes,
       h.end_minutes AS end_minutes,
       hd.day AS day,
@@ -173,7 +173,7 @@ const getCurrentBlock = (blocks) => {
     }
   }
 
-  console.log("closestUpcoming : ", closestUpcoming);
+  // console.log("closestUpcoming : ", closestUpcoming);
 
   return closestUpcoming || { status: "free" };
 };
@@ -194,11 +194,11 @@ export default function Dashboard() {
     const { recurring, tasks } = await loadAllBlocks(db);
     const grouped = groupBusyBlocks(recurring, tasks);
     // console.log("currentBlock : ", getCurrentBlock(grouped));
-    console.log("grouped : ", grouped);
+    // console.log("grouped : ", grouped);
 
     setBlocks(grouped);
     setCurrentBlock(getCurrentBlock(grouped));
-    console.log("currentBlock : ", currentBlock);
+    // console.log("currentBlock : ", currentBlock);
   }, [db]);
 
   useFocusEffect(
@@ -227,7 +227,7 @@ export default function Dashboard() {
   const block = currentBlock ?? { status: "free" };
 
   // console.log("currentBlock : ", currentBlock);
-  console.log("block : ", block);
+  // console.log("block : ", block);
 
   const statusMap = {
     ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },

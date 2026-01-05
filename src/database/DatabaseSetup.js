@@ -9,34 +9,45 @@ export default function DatabaseSetup() {
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS routines (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          start_minutes INTEGER,
-          end_minutes INTEGER
+          title TEXT NOT NULL
         );
 
-
-        CREATE TABLE IF NOT EXISTS routine_days (
+        CREATE TABLE IF NOT EXISTS routine_schedules (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          routineId INTEGER,
-          day INTEGER NOT NULL,
-          FOREIGN KEY (routineId) REFERENCES routines(id)
-        );
+          routineId INTEGER NOT NULL,
+
+          day INTEGER NOT NULL,     
+          start_minutes INTEGER NOT NULL,
+          end_minutes INTEGER NOT NULL,
+
+          FOREIGN KEY (routineId)
+          REFERENCES routines(id)
+          ON DELETE CASCADE
+        );  
+
+
 
         CREATE TABLE IF NOT EXISTS habits (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          start_minutes INTEGER,    
-          end_minutes INTEGER,      
+          title TEXT NOT NULL,   
           current_streak INTEGER DEFAULT 0,
           best_streak INTEGER DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS habit_days (
+        CREATE TABLE IF NOT EXISTS habit_schedules (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           habitId INTEGER NOT NULL,
-          day INTEGER NOT NULL,
-          FOREIGN KEY (habitId) REFERENCES habits(id)
-        );
+
+          day INTEGER NOT NULL,     
+          start_minutes INTEGER NOT NULL,
+          end_minutes INTEGER NOT NULL,
+
+          FOREIGN KEY (habitId)
+          REFERENCES habits(id)
+          ON DELETE CASCADE
+        ); 
+
+        
 
         CREATE TABLE IF NOT EXISTS tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +82,11 @@ export default function DatabaseSetup() {
       `);
 
       const res = await db.getAllAsync(`
-        SELECT * FROM habits;
+        SELECT * FROM routines;
+      `);
+
+      const des = await db.getAllAsync(`
+        SELECT * FROM routine_schedules;
       `);
 
       const pes = await db.getAllAsync(`
@@ -79,7 +94,7 @@ export default function DatabaseSetup() {
       `);
 
       console.log(res);
-      console.log(pes);
+      console.log(des);
     };
 
     createTables();

@@ -90,98 +90,6 @@ export default function EditRoutine() {
     }
   };
 
-  //   const DAY_MIN = 1440;
-
-  // const getRanges = (dayIndex, start, end) => {
-  //   if (end >= start) {
-  //     return [
-  //       {
-  //         start: dayIndex * DAY_MIN + start,
-  //         end: dayIndex * DAY_MIN + end,
-  //       },
-  //     ];
-  //   }
-
-  //   // Overnight → split into two ranges
-  //   return [
-  //     {
-  //       start: dayIndex * DAY_MIN + start,
-  //       end: dayIndex * DAY_MIN + DAY_MIN,
-  //     },
-  //     {
-  //       start: (dayIndex + 1) * DAY_MIN,
-  //       end: (dayIndex + 1) * DAY_MIN + end,
-  //     },
-  //   ];
-  // };
-
-  // const isOverlap = (a, b) => a.start < b.end && b.start < a.end;
-
-  // const findConflict = ({ items, startM, endM }) => {
-  //   for (let item of items) {
-  //     // Skip self while editing
-  //     if (
-  //       mode === "edit" &&
-  //       item.type === "habit" &&
-  //       item.id === existing?.id
-  //     ) {
-  //       continue;
-  //     }
-
-  //     // ----------------------------
-  //     // TASKS (date based)
-  //     // ----------------------------
-  //     if (item.type === "task") {
-  //       for (let i = 0; i < item.dates.length; i++) {
-  //         const dayIndex = new Date(item.dates[i]).getDay();
-
-  //         if (!days[dayIndex]) continue;
-
-  //         const newRanges = getRanges(dayIndex, startM, endM);
-  //         const existingRanges = getRanges(
-  //           dayIndex,
-  //           item.start_minutes[i],
-  //           item.end_minutes[i]
-  //         );
-
-  //         for (const a of newRanges) {
-  //           for (const b of existingRanges) {
-  //             if (isOverlap(a, b)) {
-  //               return { type: item.type, title: item.title };
-  //             }
-  //           }
-  //         }
-  //       }
-  //     }
-
-  //     // ----------------------------
-  //     // HABITS / ROUTINES
-  //     // ----------------------------
-  //     else {
-  //       for (const dayIndex of item.days) {
-  //         if (!days[dayIndex]) continue;
-
-  //         const newRanges = getRanges(dayIndex, startM, endM);
-  //         const existingRanges = getRanges(
-  //           dayIndex,
-  //           item.start_minutes,
-  //           item.end_minutes
-  //         );
-
-  //         for (const a of newRanges) {
-  //           for (const b of existingRanges) {
-  //             if (isOverlap(a, b)) {
-  //               return { type: item.type, title: item.title };
-  //             }
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-
-  //   return null;
-  // };
-
   const findConflict = ({ items, startM, endM }) => {
     for (let item of items) {
       // Skip self when editing habit
@@ -200,7 +108,12 @@ export default function EditRoutine() {
           if (!days[weekday]) continue;
 
           if (
-            intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
+            intervalsOverlap(
+              startM,
+              endM,
+              item.start_minutes[i],
+              item.end_minutes[i]
+            )
           ) {
             return {
               type: item.type,
@@ -209,16 +122,24 @@ export default function EditRoutine() {
           }
         }
       } else {
-        const shareDay = item.days.some((dayIndex) => days[dayIndex]);
-        if (!shareDay) continue;
+        for (let i = 0; i < item.days.length; i++) {
+          const weekday = item.days[i];
 
-        if (
-          intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-        ) {
-          return {
-            type: item.type,
-            title: item.title,
-          };
+          if (!days[weekday]) continue;
+
+          if (
+            intervalsOverlap(
+              startM,
+              endM,
+              item.start_minutes[i],
+              item.end_minutes[i]
+            )
+          ) {
+            return {
+              type: item.type,
+              title: item.title,
+            };
+          }
         }
       }
     }
@@ -261,9 +182,9 @@ export default function EditRoutine() {
       if (mode === "add") {
         const result = await db.runAsync(
           `INSERT INTO routines 
-        (title, start_minutes, end_minutes)
-       VALUES (?, ?, ?);`,
-          [label.trim(), startM, endM]
+            (title)
+          VALUES (?);`,
+          [label.trim()]
         );
         const newId = result.lastInsertRowId;
 
@@ -271,13 +192,25 @@ export default function EditRoutine() {
           throw new Error("Insert succeeded but couldn't read new row id.");
         }
 
-        // insert days
+        // insert schedule
         for (let i = 0; i < days.length; i++) {
           if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-              [newId, i]
-            );
+            if (startM < endM) {
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, i, startM, endM]
+              );
+            } else {
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, i, startM, 1440]
+              );
+
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, (i + 1) % 7, 0, endM]
+              );
+            }
           }
         }
       } else {
@@ -285,29 +218,41 @@ export default function EditRoutine() {
         if (!existing?.id) throw new Error("Missing routine id for update.");
         await db.runAsync(
           `UPDATE routines SET 
-        title=?, start_minutes=?, end_minutes=?
-       WHERE id=?`,
-          [label.trim(), startM, endM, existing.id]
+            title=?
+          WHERE id=?`,
+          [label.trim(), existing.id]
         );
 
         // delete old days
-        await db.runAsync(`DELETE FROM routine_days WHERE routineId=?`, [
+        await db.runAsync(`DELETE FROM routine_schedules WHERE routineId=?`, [
           existing.id,
         ]);
 
         // insert new days
         for (let i = 0; i < days.length; i++) {
           if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO routine_days (routineId, day) VALUES (?, ?);`,
-              [existing.id, i]
-            );
+            if (startM < endM) {
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, i, startM, endM]
+              );
+            } else {
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, i, startM, 1440]
+              );
+
+              await db.runAsync(
+                `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, (i + 1) % 7, 0, endM]
+              );
+            }
           }
         }
       }
 
       //REBALANCE
-      await rebalance(db, "routine");
+      // await rebalance(db, "routine");
 
       await db.runAsync("COMMIT");
       console.log("Routine saved successfully.");

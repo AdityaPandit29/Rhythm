@@ -7,15 +7,43 @@ import { useSQLiteContext } from "expo-sqlite";
 export default function RoutineCard({
   id,
   name,
-  startMinutes,
-  endMinutes,
-  daysSelected,
+  intervals,
+  // startMinutes,
+  // endMinutes,
+  // daysSelected,
   onDeleted,
 }) {
   const navigation = useNavigation();
   const db = useSQLiteContext();
 
+  const isOvernight =
+    intervals.some((i) => i.end === 1440) &&
+    intervals.some((i) => i.start === 0);
+
+  let startMinutes, endMinutes;
+
+  if (isOvernight) {
+    const beforeMidnight = intervals.find((i) => i.end === 1440);
+    const afterMidnight = intervals.find((i) => i.start === 0);
+
+    startMinutes = beforeMidnight.start;
+    endMinutes = afterMidnight.end;
+  } else {
+    // non-overnight: exactly one interval
+    startMinutes = intervals[0].start;
+    endMinutes = intervals[0].end;
+  }
+
   // daysSelected: number[] (0 = Sun ... 6 = Sat)
+  const daysSelected = isOvernight
+    ? [
+        ...new Set(
+          intervals
+            .filter((i) => i.start !== 0) // drop carry-over day
+            .map((i) => i.day)
+        ),
+      ]
+    : [...new Set(intervals.map((i) => i.day))];
 
   const booleanDays = Array(7).fill(false);
 
@@ -38,12 +66,12 @@ export default function RoutineCard({
           onPress: async () => {
             try {
               await db.runAsync(
-                `DELETE FROM routine_days WHERE routineId = ?`,
+                `DELETE FROM routine_schedules WHERE routineId = ?`,
                 [id]
               );
               await db.runAsync(`DELETE FROM routines WHERE id = ?`, [id]);
 
-              // 👉 Trigger refresh in parent
+              // Trigger refresh in parent
               if (onDeleted) {
                 onDeleted();
               }

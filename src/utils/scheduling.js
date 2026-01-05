@@ -43,26 +43,26 @@ export const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
 export const loadManualBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
     SELECT 
-      r.start_minutes AS start_minutes,
-      r.end_minutes AS end_minutes,
-      d.day AS day,
+      rs.start_minutes AS start_minutes,
+      rs.end_minutes AS end_minutes,
+      rs.day AS day,
       'routine' AS type,
       r.id AS itemId,
       r.title AS title
-    FROM routines r
-    LEFT JOIN routine_days d ON r.id = d.routineId
+    FROM routine_schedules rs
+    LEFT JOIN routines r ON rs.routineId = r.id
 
     UNION ALL
 
     SELECT 
-      h.start_minutes AS start_minutes,
-      h.end_minutes AS end_minutes,
-      hd.day AS day,
+      hs.start_minutes AS start_minutes,
+      hs.end_minutes AS end_minutes,
+      hs.day AS day,
       'habit' AS type,
       h.id AS itemId,
       h.title AS title
-    FROM habits h
-    LEFT JOIN habit_days hd ON h.id = hd.habitId
+    FROM habit_schedules hs
+    LEFT JOIN habits h ON hs.habitId = h.id
   `);
 
   const manualTasks = await db.getAllAsync(`
@@ -92,15 +92,15 @@ export const groupBusyBlocks = (recurring, tasks) => {
         type: row.type,
         id: row.itemId,
         title: row.title,
-        start_minutes: row.start_minutes,
-        end_minutes: row.end_minutes,
+        start_minutes: [],
+        end_minutes: [],
         days: [],
       };
     }
 
-    if (!grouped[key].days.includes(row.day)) {
-      grouped[key].days.push(row.day);
-    }
+    grouped[key].days.push(row.day);
+    grouped[key].start_minutes.push(row.start_minutes);
+    grouped[key].end_minutes.push(row.end_minutes);
   });
 
   tasks.forEach((row) => {
