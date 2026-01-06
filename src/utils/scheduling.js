@@ -17,28 +17,8 @@ export const PRIORITY_WEIGHT = {
  * Convert Date to YYYY-MM-DD format (safe for DB)
  */
 
-export const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => {
-  const check = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
-
-  const aCross = aStart > aEnd; // crosses midnight
-  const bCross = bStart > bEnd; // crosses midnight
-
-  if (!aCross && !bCross) {
-    return check(aStart, aEnd, bStart, bEnd);
-  }
-
-  if (aCross && bCross) {
-    return true; // both span midnight → guaranteed overlap
-  }
-
-  if (aCross) {
-    return check(aStart, 1440, bStart, bEnd) || check(0, aEnd, bStart, bEnd);
-  }
-
-  if (bCross) {
-    return check(aStart, aEnd, bStart, 1440) || check(aStart, aEnd, 0, bEnd);
-  }
-};
+export const intervalsOverlap = (aStart, aEnd, bStart, bEnd) =>
+  aStart < bEnd && aEnd > bStart;
 
 export const loadManualBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
@@ -92,15 +72,15 @@ export const groupBusyBlocks = (recurring, tasks) => {
         type: row.type,
         id: row.itemId,
         title: row.title,
-        start_minutes: [],
-        end_minutes: [],
-        days: [],
+        intervals: [],
       };
     }
 
-    grouped[key].days.push(row.day);
-    grouped[key].start_minutes.push(row.start_minutes);
-    grouped[key].end_minutes.push(row.end_minutes);
+    grouped[key].intervals.push({
+      day: row.day,
+      start: row.start_minutes,
+      end: row.end_minutes,
+    });
   });
 
   tasks.forEach((row) => {
@@ -121,30 +101,6 @@ export const groupBusyBlocks = (recurring, tasks) => {
     grouped[key].start_minutes.push(row.start_minutes);
     grouped[key].end_minutes.push(row.end_minutes);
   });
-
-  // // ---------- sort per group ----------
-  // for (const item of Object.values(grouped)) {
-  //   // recurring sort
-  //   if (item.type !== "task") {
-  //     if (Array.isArray(item.days)) item.days.sort((a, b) => a - b); // numeric [web:695]
-  //     continue;
-  //   }
-
-  //   // task sort: sort triples together
-  //   const zipped = item.dates.map((date, i) => ({
-  //     date,
-  //     start: item.start_minutes[i],
-  //     end: item.end_minutes[i],
-  //   }));
-
-  //   // If dates are ISO (YYYY-MM-DD), string sort works reliably. [web:699]
-  //   zipped.sort((a, b) => (a.date === b.date ? a.start - b.start : a.date > b.date ? 1 : -1)); [web:695][web:699]
-
-  //   item.dates = zipped.map((x) => x.date);
-  //   item.start_minutes = zipped.map((x) => x.start);
-  //   item.end_minutes = zipped.map((x) => x.end);
-  // }
-
   return Object.values(grouped);
 };
 

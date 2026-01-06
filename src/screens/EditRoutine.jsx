@@ -122,19 +122,16 @@ export default function EditRoutine() {
           }
         }
       } else {
-        for (let i = 0; i < item.days.length; i++) {
-          const weekday = item.days[i];
+        for (let i = 0; i < item.intervals.length; i++) {
+          const interval = item.intervals[i];
+          const weekday = interval.day;
+          const startMinutes = interval.start;
+          const endMinutes = interval.end;
 
           if (!days[weekday]) continue;
 
-          if (
-            intervalsOverlap(
-              startM,
-              endM,
-              item.start_minutes[i],
-              item.end_minutes[i]
-            )
-          ) {
+          if (intervalsOverlap(startM, endM, startMinutes, endMinutes)) {
+            console.log(item);
             return {
               type: item.type,
               title: item.title,
