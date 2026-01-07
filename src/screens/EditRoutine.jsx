@@ -90,7 +90,28 @@ export default function EditRoutine() {
     }
   };
 
+  const buildIntervalsFromSelection = (days, startM, endM) => {
+    const intervals = [];
+
+    for (let day = 0; day < 7; day++) {
+      if (!days[day]) continue;
+
+      if (startM < endM) {
+        // Normal same-day routine
+        intervals.push({ day, start: startM, end: endM });
+      } else {
+        // Overnight routine → split
+        intervals.push({ day, start: startM, end: 1440 });
+        intervals.push({ day: (day + 1) % 7, start: 0, end: endM });
+      }
+    }
+
+    return intervals;
+  };
+
   const findConflict = ({ items, startM, endM }) => {
+    const newIntervals = buildIntervalsFromSelection(days, startM, endM);
+
     for (let item of items) {
       // Skip self when editing habit
       if (
@@ -122,20 +143,16 @@ export default function EditRoutine() {
           }
         }
       } else {
-        for (let i = 0; i < item.intervals.length; i++) {
-          const interval = item.intervals[i];
-          const weekday = interval.day;
-          const startMinutes = interval.start;
-          const endMinutes = interval.end;
+        for (const ni of newIntervals) {
+          for (const ei of item.intervals) {
+            if (ni.day !== ei.day) continue;
 
-          if (!days[weekday]) continue;
-
-          if (intervalsOverlap(startM, endM, startMinutes, endMinutes)) {
-            console.log(item);
-            return {
-              type: item.type,
-              title: item.title,
-            };
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
           }
         }
       }
