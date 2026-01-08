@@ -122,6 +122,7 @@ export default function EditRoutine() {
         continue;
       }
 
+      // change***************************************************************
       if (item.type === "task") {
         for (let i = 0; i < item.dates.length; i++) {
           const weekday = new Date(item.dates[i]).getDay();

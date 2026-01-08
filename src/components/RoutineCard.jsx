@@ -4,15 +4,7 @@ import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
 
-export default function RoutineCard({
-  id,
-  name,
-  intervals,
-  // startMinutes,
-  // endMinutes,
-  // daysSelected,
-  onDeleted,
-}) {
+export default function RoutineCard({ id, name, intervals, onDeleted }) {
   const navigation = useNavigation();
   const db = useSQLiteContext();
 

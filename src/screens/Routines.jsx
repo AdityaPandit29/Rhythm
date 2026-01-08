@@ -93,9 +93,6 @@ export default function Routines() {
             id={r.id}
             name={r.name}
             intervals={r.intervals}
-            // startMinutes={r.startMinutes}
-            // endMinutes={r.endMinutes}
-            // daysSelected={r.daysSelected}
             onDeleted={loadRoutines}
           />
         ))}

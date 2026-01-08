@@ -27,27 +27,35 @@ export default function Habits() {
         SELECT * FROM habits ORDER BY id DESC;
       `);
 
-      // Fetch days separately
-      const daysRows = await db.getAllAsync(`
-        SELECT habitId, day FROM habit_days;
-      `);
+      // Fetch all schedules
+      const scheduleRows = await db.getAllAsync(`
+      SELECT habitId, day, start_minutes, end_minutes
+      FROM habit_schedules
+      ORDER BY habitId, day, start_minutes;
+    `);
 
-      // Convert days to a structure like: { 1: [0,1], 2:[5], ... }
-      const dayMap = {};
-      for (let row of daysRows) {
-        if (!dayMap[row.habitId]) dayMap[row.habitId] = [];
-        dayMap[row.habitId].push(row.day);
+      // Build map: habitId -> intervals[]
+      const scheduleMap = {};
+
+      for (const row of scheduleRows) {
+        if (!scheduleMap[row.habitId]) {
+          scheduleMap[row.habitId] = [];
+        }
+
+        scheduleMap[row.habitId].push({
+          day: row.day,
+          start: row.start_minutes,
+          end: row.end_minutes,
+        });
       }
 
-      // Merge habits + days into final list
+      // Merge habits + schedules
       const finalList = habitRows.map((h) => ({
         id: h.id,
         name: h.title,
-        startMinutes: h.start_minutes,
-        endMinutes: h.end_minutes,
-        bestStreak: h.best_streak,
+        intervals: scheduleMap[h.id] || [],
         currentStreak: h.current_streak,
-        daysSelected: dayMap[h.id] || [], // e.g. [1,3]
+        bestStreak: h.best_streak,
       }));
 
       setHabits(finalList);
@@ -87,11 +95,9 @@ export default function Habits() {
             key={h.id}
             id={h.id}
             name={h.name}
-            startMinutes={h.startMinutes}
-            endMinutes={h.endMinutes}
+            intervals={h.intervals}
             bestStreak={h.bestStreak}
             currentStreak={h.currentStreak}
-            daysSelected={h.daysSelected} // [0,1,...]
             onDeleted={loadHabits}
           />
         ))}

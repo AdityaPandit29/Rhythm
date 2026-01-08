@@ -88,7 +88,28 @@ export default function EditHabit() {
     }
   };
 
+  const buildIntervalsFromSelection = (days, startM, endM) => {
+    const intervals = [];
+
+    for (let day = 0; day < 7; day++) {
+      if (!days[day]) continue;
+
+      if (startM < endM) {
+        // Normal same-day routine
+        intervals.push({ day, start: startM, end: endM });
+      } else {
+        // Overnight routine → split
+        intervals.push({ day, start: startM, end: 1440 });
+        intervals.push({ day: (day + 1) % 7, start: 0, end: endM });
+      }
+    }
+
+    return intervals;
+  };
+
   const findConflict = ({ items, startM, endM }) => {
+    const newIntervals = buildIntervalsFromSelection(days, startM, endM);
+
     for (let item of items) {
       // Skip self when editing habit
       if (
@@ -115,16 +136,17 @@ export default function EditHabit() {
           }
         }
       } else {
-        const shareDay = item.days.some((dayIndex) => days[dayIndex]);
-        if (!shareDay) continue;
+        for (const ni of newIntervals) {
+          for (const ei of item.intervals) {
+            if (ni.day !== ei.day) continue;
 
-        if (
-          intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-        ) {
-          return {
-            type: item.type,
-            title: item.title,
-          };
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
+          }
         }
       }
     }
@@ -152,7 +174,6 @@ export default function EditHabit() {
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const { recurring, manualTasks } = await loadManualBlocks(db);
       const busyItems = groupBusyBlocks(recurring, manualTasks);
-      console.log("busyygchgc", busyItems);
 
       /* ---------- CONFLICT CHECK ---------- */
       const conflict = findConflict({ items: busyItems, startM, endM });
@@ -168,21 +189,34 @@ export default function EditHabit() {
       if (mode === "add") {
         const result = await db.runAsync(
           `INSERT INTO habits
-            (title, start_minutes, end_minutes)
+            (title)
             VALUES (?, ?, ?)`,
-          [habitName.trim(), startM, endM]
+          [habitName.trim()]
         );
 
         const newId = result.lastInsertRowId;
         if (!newId)
           throw new Error("Insert succeeded but couldn't read new row id.");
 
+        //insert schedule
         for (let i = 0; i < days.length; i++) {
           if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-              [newId, i]
-            );
+            if (startM < endM) {
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, i, startM, endM]
+              );
+            } else {
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, i, startM, 1440]
+              );
+
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [newId, (i + 1) % 7, 0, endM]
+              );
+            }
           }
         }
       } else {
@@ -190,27 +224,39 @@ export default function EditHabit() {
 
         await db.runAsync(
           `UPDATE habits SET
-              title=?, start_minutes=?, end_minutes=?
+              title=?
             WHERE id=?`,
-          [habitName.trim(), startM, endM, existing.id]
+          [habitName.trim(), existing.id]
         );
 
-        await db.runAsync(`DELETE FROM habit_days WHERE habitId=?`, [
+        await db.runAsync(`DELETE FROM habit_schedules WHERE habitId=?`, [
           existing.id,
         ]);
 
         for (let i = 0; i < days.length; i++) {
           if (days[i]) {
-            await db.runAsync(
-              `INSERT INTO habit_days (habitId, day) VALUES (?, ?)`,
-              [existing.id, i]
-            );
+            if (startM < endM) {
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, i, startM, endM]
+              );
+            } else {
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, i, startM, 1440]
+              );
+
+              await db.runAsync(
+                `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
+                [existing.id, (i + 1) % 7, 0, endM]
+              );
+            }
           }
         }
       }
 
       //REBALANCE
-      await rebalance(db, "habit");
+      // await rebalance(db, "habit");
 
       await db.runAsync("COMMIT");
 
