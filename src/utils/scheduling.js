@@ -58,13 +58,13 @@ export const loadManualBlocks = async (db) => {
     WHERE t.is_auto = 0;
   `);
 
-  return { recurring, manualTasks };
+  return [...recurring, ...manualTasks];
 };
 
-export const groupBusyBlocks = (recurring, tasks) => {
+export const groupBusyBlocks = (blocks) => {
   const grouped = {};
 
-  recurring.forEach((row) => {
+  blocks.forEach((row) => {
     const key = `${row.type}-${row.itemId}`;
 
     if (!grouped[key]) {
@@ -76,31 +76,21 @@ export const groupBusyBlocks = (recurring, tasks) => {
       };
     }
 
-    grouped[key].intervals.push({
-      day: row.day,
-      start: row.start_minutes,
-      end: row.end_minutes,
-    });
-  });
-
-  tasks.forEach((row) => {
-    const key = `${row.type}-${row.itemId}`;
-
-    if (!grouped[key]) {
-      grouped[key] = {
-        type: row.type,
-        id: row.itemId,
-        title: row.title,
-        start_minutes: [],
-        end_minutes: [],
-        dates: [],
-      };
+    if (row.day !== undefined) {
+      grouped[key].intervals.push({
+        day: row.day,
+        start: row.start_minutes,
+        end: row.end_minutes,
+      });
+    } else {
+      grouped[key].intervals.push({
+        date: row.date,
+        start: row.start_minutes,
+        end: row.end_minutes,
+      });
     }
-
-    grouped[key].dates.push(row.date);
-    grouped[key].start_minutes.push(row.start_minutes);
-    grouped[key].end_minutes.push(row.end_minutes);
   });
+
   return Object.values(grouped);
 };
 

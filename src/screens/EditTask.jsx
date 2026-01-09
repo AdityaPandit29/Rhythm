@@ -212,8 +212,8 @@ export default function EditTask() {
         return Alert.alert("Missing Title", "Please enter a task title.");
       }
 
-      const { recurring, manualTasks } = await loadManualBlocks(db);
-      const busyItems = groupBusyBlocks(recurring, manualTasks);
+      const blocks = await loadManualBlocks(db);
+      const busyItems = groupBusyBlocks(blocks);
 
       if (isAuto) {
         /* ---------- DEADLINE VALIDATION ---------- */

@@ -107,7 +107,7 @@ export default function EditHabit() {
     return intervals;
   };
 
-  const findConflict = ({ items, startM, endM }) => {
+  const findConflict = ({ items, days, startM, endM }) => {
     const newIntervals = buildIntervalsFromSelection(days, startM, endM);
 
     for (let item of items) {
@@ -121,18 +121,20 @@ export default function EditHabit() {
       }
 
       if (item.type === "task") {
-        for (let i = 0; i < item.dates.length; i++) {
-          const weekday = new Date(item.dates[i]).getDay();
+        for (const ni of newIntervals) {
+          // new intervals
+          for (const ei of item.intervals) {
+            // existing intervals
+            const day = new Date(ei.date).getDay();
 
-          if (!days[weekday]) continue;
+            if (ni.day !== day) continue;
 
-          if (
-            intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-          ) {
-            return {
-              type: item.type,
-              title: item.title,
-            };
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
           }
         }
       } else {
@@ -172,11 +174,11 @@ export default function EditHabit() {
       const endM = endMinutes;
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
-      const { recurring, manualTasks } = await loadManualBlocks(db);
-      const busyItems = groupBusyBlocks(recurring, manualTasks);
+      const blocks = await loadManualBlocks(db);
+      const busyItems = groupBusyBlocks(blocks);
 
       /* ---------- CONFLICT CHECK ---------- */
-      const conflict = findConflict({ items: busyItems, startM, endM });
+      const conflict = findConflict({ items: busyItems, days, startM, endM });
       if (conflict) {
         return Alert.alert(
           "Time Conflict",

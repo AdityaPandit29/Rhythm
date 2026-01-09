@@ -109,7 +109,8 @@ export default function EditRoutine() {
     return intervals;
   };
 
-  const findConflict = ({ items, startM, endM }) => {
+  // added days. if any error occurs remove it
+  const findConflict = ({ items, days, startM, endM }) => {
     const newIntervals = buildIntervalsFromSelection(days, startM, endM);
 
     for (let item of items) {
@@ -122,25 +123,21 @@ export default function EditRoutine() {
         continue;
       }
 
-      // change***************************************************************
       if (item.type === "task") {
-        for (let i = 0; i < item.dates.length; i++) {
-          const weekday = new Date(item.dates[i]).getDay();
+        for (const ni of newIntervals) {
+          // new intervals
+          for (const ei of item.intervals) {
+            // existing intervals
+            const day = new Date(ei.date).getDay();
 
-          if (!days[weekday]) continue;
+            if (ni.day !== day) continue;
 
-          if (
-            intervalsOverlap(
-              startM,
-              endM,
-              item.start_minutes[i],
-              item.end_minutes[i]
-            )
-          ) {
-            return {
-              type: item.type,
-              title: item.title,
-            };
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
           }
         }
       } else {
@@ -179,12 +176,12 @@ export default function EditRoutine() {
       const endM = endMinutes;
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
-      const { recurring, manualTasks } = await loadManualBlocks(db);
-      const busyItems = groupBusyBlocks(recurring, manualTasks);
+      const blocks = await loadManualBlocks(db);
+      const busyItems = groupBusyBlocks(blocks);
 
       // --- CHECK CONFLICT ---
 
-      const conflict = findConflict({ items: busyItems, startM, endM });
+      const conflict = findConflict({ items: busyItems, days, startM, endM });
       if (conflict) {
         return Alert.alert(
           "Time Conflict",
