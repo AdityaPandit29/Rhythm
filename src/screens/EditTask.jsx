@@ -161,9 +161,45 @@ export default function EditTask() {
     }
   };
 
+  const buildIntervalsFromSelection = (date, startM, endM) => {
+    const curDateString = date.toLocaleDateString("sv-SE");
+    const curDay = date.getDay();
+
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const nextDateString = nextDate.toLocaleDateString("sv-SE");
+    const nextDay = nextDate.getDay();
+    const intervals = [];
+
+    if (startM < endM) {
+      // Normal same-day routine
+      intervals.push({
+        date: curDateString,
+        day: curDay,
+        start: startM,
+        end: endM,
+      });
+    } else {
+      // Overnight routine → split
+      intervals.push({
+        date: curDateString,
+        day: curDay,
+        start: startM,
+        end: 1440,
+      });
+      intervals.push({
+        date: nextDateString,
+        day: nextDay,
+        start: 0,
+        end: endM,
+      });
+    }
+
+    return intervals;
+  };
+
   const findConflict = ({ items, date, startM, endM }) => {
-    const dateString = date.toLocaleDateString("sv-SE");
-    const day = date.getDay();
+    const newIntervals = buildIntervalsFromSelection(date, startM, endM);
 
     for (let item of items) {
       if (mode === "edit" && item.type === "task" && item.id === existing?.id)
@@ -171,16 +207,14 @@ export default function EditTask() {
 
       // ---------- DAY / DATE CHECK ----------
       if (item.type === "task") {
-        for (let i = 0; i < item.dates.length; i++) {
-          if (item.dates[i] === dateString) {
-            if (
-              intervalsOverlap(
-                startM,
-                endM,
-                item.start_minutes[i],
-                item.end_minutes[i]
-              )
-            ) {
+        for (const ni of newIntervals) {
+          // new intervals
+          for (const ei of item.intervals) {
+            // existing intervals
+
+            if (ni.date !== ei.date) continue;
+
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
               return {
                 type: item.type,
                 title: item.title,
@@ -189,14 +223,19 @@ export default function EditTask() {
           }
         }
       } else {
-        if (item.days.includes(day)) {
-          if (
-            intervalsOverlap(startM, endM, item.start_minutes, item.end_minutes)
-          ) {
-            return {
-              type: item.type,
-              title: item.title,
-            };
+        for (const ni of newIntervals) {
+          // new intervals
+          for (const ei of item.intervals) {
+            // existing intervals
+
+            if (ni.day !== ei.day) continue;
+
+            if (intervalsOverlap(ni.start, ni.end, ei.start, ei.end)) {
+              return {
+                type: item.type,
+                title: item.title,
+              };
+            }
           }
         }
       }
@@ -595,7 +634,7 @@ export default function EditTask() {
           }
 
           //REBALANCE
-          await rebalance(db, "task");
+          // await rebalance(db, "task");
 
           await db.runAsync("COMMIT");
         } catch (error) {
