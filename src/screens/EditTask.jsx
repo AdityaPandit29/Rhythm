@@ -326,7 +326,7 @@ export default function EditTask() {
             priority,
             deadlineDate: deadlineDate.toLocaleDateString("sv-SE"),
             deadlineMinutes: deadlineMinutes,
-            duration_left: totalMinutes,
+            duration: totalMinutes,
           });
 
           const today = new Date();
@@ -402,7 +402,7 @@ export default function EditTask() {
                 priority: t.priority || "Low",
                 deadlineDate: t.deadline_date,
                 deadlineMinutes: t.deadline_minutes || 0,
-                duration_left: t.total_duration,
+                duration: t.total_duration,
               }),
             }));
 
@@ -448,7 +448,7 @@ export default function EditTask() {
               );
             }
 
-            const fixedSchedules = groupBusyBlocks([], fixedSchedulesRow);
+            const fixedSchedules = groupBusyBlocks(fixedSchedulesRow);
             const fixedItems = [...busyItems, ...fixedSchedules];
 
             // ===== 7. BUILD CALENDAR & SCHEDULE =====

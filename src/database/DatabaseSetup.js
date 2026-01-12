@@ -47,7 +47,6 @@ export default function DatabaseSetup() {
           ON DELETE CASCADE
         ); 
 
-        
 
         CREATE TABLE IF NOT EXISTS tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

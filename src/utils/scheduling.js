@@ -173,7 +173,7 @@ export const computeAuthority = ({
   priority = "Low",
   deadlineDate,
   deadlineMinutes,
-  duration_left,
+  duration,
 }) => {
   const now = new Date();
   const deadline = new Date(deadlineDate);
@@ -205,7 +205,7 @@ export const computeAuthority = ({
       : 1;
 
   // Duration factor (longer tasks need earlier scheduling)
-  const durationFactor = Math.log(Math.max(duration_left, 1)) / Math.log(10);
+  const durationFactor = Math.log(Math.max(duration, 1)) / Math.log(10);
 
   // Final authority score
   const authority = priorityWeight * urgencyMultiplier * (1 + durationFactor);
@@ -468,7 +468,7 @@ export const rebalance = async (db, type) => {
         priority: t.priority || "Low",
         deadlineDate: t.deadline_date,
         deadlineMinutes: t.deadline_minutes || 0,
-        duration_left: t.total_duration,
+        duration: t.total_duration,
       }),
     }));
 
