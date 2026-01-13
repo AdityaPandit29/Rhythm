@@ -192,10 +192,9 @@ export default function EditHabit() {
         const result = await db.runAsync(
           `INSERT INTO habits
             (title)
-            VALUES (?, ?, ?)`,
+            VALUES (?)`,
           [habitName.trim()]
         );
-
         const newId = result.lastInsertRowId;
         if (!newId)
           throw new Error("Insert succeeded but couldn't read new row id.");

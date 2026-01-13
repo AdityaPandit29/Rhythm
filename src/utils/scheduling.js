@@ -110,26 +110,19 @@ const addBlockToCalendar = (calendar, date, start, end) => {
 };
 
 const expandRecurringItem = ({ calendar, item, startDate, endDate }) => {
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+  for (
+    let d = new Date(startDate);
+    d <= endDate;
+    d = new Date(d.getTime() + 86400000)
+  ) {
     const day = d.getDay();
-    if (!item.days || !item.days.includes(day)) continue;
+    for (let i = 0; i < item.intervals.length; i++) {
+      if (item.intervals[i].day != day) continue;
 
-    const start = item.start_minutes;
-    const end = item.end_minutes;
+      const start = item.intervals[i].start;
+      const end = item.intervals[i].end;
 
-    if (start < end) {
       addBlockToCalendar(calendar, d.toLocaleDateString("sv-SE"), start, end);
-    } else {
-      // overnight
-      addBlockToCalendar(
-        calendar,
-        d.toLocaleDateString("sv-SE"),
-        start,
-        DAY_MINUTES
-      );
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
-      addBlockToCalendar(calendar, next.toLocaleDateString("sv-SE"), 0, end);
     }
   }
 };
@@ -140,13 +133,13 @@ export const buildCalendar = ({ busyItems, scheduleStart, scheduleEnd }) => {
   for (const item of busyItems) {
     if (item.type === "task") {
       // manual tasks already date-based
-      for (let i = 0; i < item.dates.length; i++) {
-        if (item.dates[i]) {
-          const date = item.dates[i];
-          const start = item.start_minutes[i];
-          const end = item.end_minutes[i];
-          addBlockToCalendar(calendar, date, start, end);
-        }
+      for (let i = 0; i < item.intervals.length; i++) {
+        // if (item.dates[i]) {
+        const date = item.intervals[i].date;
+        const start = item.intervals[i].start;
+        const end = item.intervals[i].end;
+        addBlockToCalendar(calendar, date, start, end);
+        // }
       }
     } else {
       expandRecurringItem({
@@ -240,7 +233,7 @@ export const getFreeSlots = (busyBlocks, currentTimeMinutes = 0) => {
     free.push({ start: currentFree, end: 24 * 60 });
   }
 
-  // ✅ Filter out tiny slots (< MIN_CHUNK)
+  // Filter out tiny slots (< MIN_CHUNK)
   return free.filter((slot) => slot.end - slot.start >= MIN_CHUNK);
 };
 
@@ -256,9 +249,9 @@ export const autoSchedule = ({
   const results = [];
   const AUTO_EVENT_BUFFER = 20; // 20 min buffer before auto events
   const START_FROM_CURRENT_TIME_BUFFER = 5;
-  const MIN_CHUNK = 15;
 
   // Create mutable calendar copy
+  // ??????????
   const workingCalendar = { ...calendar };
   Object.keys(workingCalendar).forEach((key) => {
     workingCalendar[key] = [...(workingCalendar[key] || [])];
@@ -272,12 +265,11 @@ export const autoSchedule = ({
     taskDeadline.setMinutes(task.deadlineMinutes);
 
     // Calculate scheduling window
-
     const now = new Date();
     const daysToDeadline = Math.floor(
       (taskDeadline - now) / (1000 * 60 * 60 * 24)
     );
-    const windowStartDays = Math.max(0, daysToDeadline - 3); // 3 days before deadline
+    const windowStartDays = Math.max(0, daysToDeadline - 7); // 7 days before deadline
     const windowEndDays = daysToDeadline;
 
     let scheduled = false;
@@ -309,24 +301,21 @@ export const autoSchedule = ({
       const dateKey = d.toLocaleDateString("sv-SE");
       const todayKey = now.toLocaleDateString("sv-SE");
       const currentTimeMinutes =
-        dateKey === todayKey
-          ? now.getHours() * 60 +
-            now.getMinutes() +
-            START_FROM_CURRENT_TIME_BUFFER
-          : 0;
+        dateKey === todayKey ? now.getHours() * 60 + now.getMinutes() : 0;
       const busy = workingCalendar[dateKey] || [];
       const freeSlots = getFreeSlots(busy, currentTimeMinutes);
 
       // Find ONE slot big enough for entire task
+
       for (const slot of freeSlots) {
         const slotStart = slot.start + AUTO_EVENT_BUFFER;
         if (slotStart >= 1440) continue;
 
         // OVERNIGHT CALCULATION
         const timeIntoNextDay = Math.max(0, slotStart + duration - 1440);
-        const usableDuration = slot.end - slotStart;
+        let usableDuration = slot.end - slotStart;
 
-        // ✅ CHECK NEXT DAY if overnight
+        // CHECK NEXT DAY if overnight
         if (timeIntoNextDay > 0) {
           const nextDayKeyObj = new Date(d);
           nextDayKeyObj.setDate(nextDayKeyObj.getDate() + 1);
@@ -335,16 +324,16 @@ export const autoSchedule = ({
           const nextDayBusy = workingCalendar[nextDayKey] || [];
           const nextDayFreeSlots = getFreeSlots(nextDayBusy);
 
-          // ✅ Must have free slot at midnight next day
+          // Must have free slot at midnight next day
           const midnightFree = nextDayFreeSlots.find(
-            (slot) => slot.start <= 0 && slot.end > timeIntoNextDay
+            (slot) => slot.start <= 0 && slot.end >= timeIntoNextDay
           );
 
           if (!midnightFree) {
             continue; // Next day midnight busy → can't schedule overnight
           }
 
-          usableDuration += timeIntoNextDay; // ✅ Now safe to add
+          usableDuration += timeIntoNextDay; // Now safe to add
         }
 
         // Must fit entire task (handle overnight)
@@ -370,13 +359,11 @@ export const autoSchedule = ({
         }
 
         if (endDateTime > taskDeadline) {
-          throw new Error(
-            `Cannot schedule "${task.title}" (${duration}min) before deadline`
-          );
+          throw new Error(`Cannot schedule "${task.title}" before deadline`);
         }
 
         // SCHEDULE OVERNIGHT TASK
-        if (slotEndTime > 1440) {
+        if (slotEndTime >= 1440) {
           // Split across midnight
           const firstPartDuration = 1440 - slotStart;
           const secondPartDuration = duration - firstPartDuration;

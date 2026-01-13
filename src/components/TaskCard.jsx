@@ -21,7 +21,7 @@ export default function TaskCard({
   const navigation = useNavigation();
   const db = useSQLiteContext();
 
-  // ✅ Convert minutes to AM/PM time
+  // Convert minutes to AM/PM time
   function minutesToTimeAMPM(minutes) {
     let hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -32,7 +32,7 @@ export default function TaskCard({
       .padStart(2, "0")} ${ampm}`;
   }
 
-  // ✅ Relative date formatting
+  // Relative date formatting
   function formatRelativeDate(dateString) {
     const date = new Date(dateString);
     const now = new Date();
@@ -50,7 +50,7 @@ export default function TaskCard({
     });
   }
 
-  // ✅ Format deadline (sv-SE + relative + time)
+  // Format deadline (sv-SE + relative + time)
   const formatRelativeDeadline = (svSeDate, deadlineMins) => {
     if (!svSeDate) return "";
 
@@ -73,7 +73,7 @@ export default function TaskCard({
         year: "numeric",
       });
 
-    // ✅ FIXED: Always show time if deadlineMins exists
+    // FIXED: Always show time if deadlineMins exists
     const time =
       deadlineMins !== undefined && deadlineMins !== null
         ? minutesToTimeAMPM(deadlineMins)
@@ -192,7 +192,9 @@ export default function TaskCard({
           </Text>
           <Text style={styles.schedule}>
             {minutesToTimeAMPM(startMinutes[0])} -{" "}
-            {minutesToTimeAMPM(endMinutes[0])}
+            {minutesToTimeAMPM(
+              endMinutes.length > 1 ? endMinutes[1] : endMinutes[0]
+            )}
           </Text>
           <View style={styles.durationRow}>
             <Entypo name="stopwatch" size={16} color="#555" />
