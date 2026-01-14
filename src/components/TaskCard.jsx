@@ -196,12 +196,6 @@ export default function TaskCard({
               endMinutes.length > 1 ? endMinutes[1] : endMinutes[0]
             )}
           </Text>
-          <View style={styles.durationRow}>
-            <Entypo name="stopwatch" size={16} color="#555" />
-            <Text style={styles.durationText}>
-              Duration: {endMinutes[0] - startMinutes[0]}min
-            </Text>
-          </View>
         </>
       )}
 

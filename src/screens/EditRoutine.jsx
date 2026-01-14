@@ -264,7 +264,7 @@ export default function EditRoutine() {
       }
 
       //REBALANCE
-      // await rebalance(db, "routine");
+      await rebalance(db, "routine");
 
       await db.runAsync("COMMIT");
       console.log("Routine saved successfully.");

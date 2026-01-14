@@ -257,7 +257,7 @@ export default function EditHabit() {
       }
 
       //REBALANCE
-      // await rebalance(db, "habit");
+      await rebalance(db, "habit");
 
       await db.runAsync("COMMIT");
 

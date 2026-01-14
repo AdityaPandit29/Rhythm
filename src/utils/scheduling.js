@@ -251,7 +251,6 @@ export const autoSchedule = ({
   const START_FROM_CURRENT_TIME_BUFFER = 5;
 
   // Create mutable calendar copy
-  // ??????????
   const workingCalendar = { ...calendar };
   Object.keys(workingCalendar).forEach((key) => {
     workingCalendar[key] = [...(workingCalendar[key] || [])];
@@ -427,8 +426,8 @@ export const autoSchedule = ({
 
 export const rebalance = async (db, type) => {
   try {
-    const { recurring, manualTasks } = await loadManualBlocks(db);
-    const busyItems = groupBusyBlocks(recurring, manualTasks);
+    const blocks = await loadManualBlocks(db);
+    const busyItems = groupBusyBlocks(blocks);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

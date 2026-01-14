@@ -43,6 +43,16 @@ export default function EditTask() {
     Low: "#4CAF50",
   };
 
+  const DURATION_OPTIONS = [
+    { label: "Quick", minutes: 0 },
+    { label: "30 min", minutes: 30 },
+    { label: "1 hr", minutes: 60 },
+    { label: "1 hr 30 min", minutes: 90 },
+    { label: "2 hr", minutes: 120 },
+    { label: "2 hr 30 min", minutes: 150 },
+    { label: "3 hr", minutes: 180 },
+  ];
+
   function minutesToTimeAMPM(minutes) {
     let hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -89,9 +99,10 @@ export default function EditTask() {
 
   const duration = existing?.durationLeft ?? 0;
 
-  const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
+  // const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
 
-  const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
+  // const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
+  const [durationMinutes, setDurationMinutes] = useState(30);
 
   const [startMinutes, setStartMinutes] = useState(
     existing?.startMinutes ?? 1080
@@ -279,7 +290,7 @@ export default function EditTask() {
             "Deadline cannot be in the past."
           );
         }
-        const totalMinutes = selectedHours * 60 + selectedMinutes;
+        const totalMinutes = durationMinutes;
 
         if (totalMinutes === 0) {
           if (mode === "add") {
@@ -634,7 +645,7 @@ export default function EditTask() {
           }
 
           //REBALANCE
-          // await rebalance(db, "task");
+          await rebalance(db, "task");
 
           await db.runAsync("COMMIT");
         } catch (error) {
@@ -852,33 +863,33 @@ export default function EditTask() {
             </View>
             {/* IF AUTO-SCHEDULE ON → SHOW DURATION INPUTS */}
             {/* DURATION */}
+            {/* DURATION OPTIONS */}
             <View style={styles.section}>
               <Text style={styles.label}>Approx. Duration</Text>
 
-              <View style={styles.timeRow}>
-                {/* HOURS */}
-                <TouchableOpacity
-                  style={styles.timeCard}
-                  onPress={() => setShowHourModal(true)}
-                >
-                  <Text style={styles.timeSmall}>Hours</Text>
-                  <Text style={styles.timeLarge}>{selectedHours} h</Text>
-                </TouchableOpacity>
-
-                {/* MINUTES */}
-                <TouchableOpacity
-                  style={styles.timeCard}
-                  onPress={() => setShowMinuteModal(true)}
-                >
-                  <Text style={styles.timeSmall}>Minutes</Text>
-                  <Text style={styles.timeLarge}>{selectedMinutes} min</Text>
-                </TouchableOpacity>
+              <View style={styles.durationGrid}>
+                {DURATION_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.minutes}
+                    style={[
+                      styles.durationChip,
+                      durationMinutes === opt.minutes &&
+                        styles.durationChipActive,
+                    ]}
+                    onPress={() => setDurationMinutes(opt.minutes)}
+                  >
+                    <Text
+                      style={[
+                        styles.durationText,
+                        durationMinutes === opt.minutes &&
+                          styles.durationTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
-              {/* INFO IF DURATION = 0 */}
-              {/* 👉 Show conditionally if duration = 0 */}
-              {/* <Text style={{ marginTop: 8, color: "#777", fontSize: 12 }}>
-            Rhythm will place this task in any free time.
-          </Text> */}
             </View>
           </>
         ) : (
@@ -967,7 +978,7 @@ export default function EditTask() {
         </View>
 
         {/* MODALS */}
-        {renderPickerModal(
+        {/* {renderPickerModal(
           showHourModal,
           setShowHourModal,
           [...Array(3).keys()], // 0–12 hours
@@ -979,7 +990,7 @@ export default function EditTask() {
           setShowMinuteModal,
           [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
           setSelectedMinutes
-        )}
+        )} */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1154,5 +1165,44 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 16,
     fontWeight: "600",
+  },
+
+  durationGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
+  durationChip: {
+    width: "32%",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  durationChipActive: {
+    backgroundColor: "#6C63FF",
+    borderColor: "#6C63FF",
+  },
+
+  durationText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+
+  durationTextActive: {
+    color: "#FFF",
+  },
+
+  durationHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#777",
   },
 });
