@@ -18,6 +18,7 @@ import {
   groupBusyBlocks,
   loadManualBlocks,
   rebalance,
+  cleanupExpiredTasks,
 } from "../utils/scheduling.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -172,6 +173,8 @@ export default function EditHabit() {
 
       const startM = startMinutes;
       const endM = endMinutes;
+
+      await cleanupExpiredTasks(db);
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
       const blocks = await loadManualBlocks(db);

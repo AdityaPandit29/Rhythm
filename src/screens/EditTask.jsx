@@ -26,6 +26,7 @@ import {
   MAX_LOOKAHEAD_DAYS,
   loadManualBlocks,
   rebalance,
+  cleanupExpiredTasks,
 } from "../utils/scheduling.js";
 
 export default function EditTask() {
@@ -262,6 +263,8 @@ export default function EditTask() {
         return Alert.alert("Missing Title", "Please enter a task title.");
       }
 
+      await cleanupExpiredTasks(db);
+
       const blocks = await loadManualBlocks(db);
       const busyItems = groupBusyBlocks(blocks);
 
@@ -280,6 +283,8 @@ export default function EditTask() {
         const deadlineFull = new Date(deadlineDate);
         deadlineFull.setHours(0, 0, 0, 0);
         deadlineFull.setMinutes(deadlineMinutes);
+        const maxEnd = new Date(today);
+        maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
 
         if (
           deadlineDay < today ||
@@ -288,6 +293,12 @@ export default function EditTask() {
           return Alert.alert(
             "Invalid Deadline",
             "Deadline cannot be in the past."
+          );
+        }
+        if (deadlineDay >= maxEnd) {
+          return Alert.alert(
+            "Invalid Deadline",
+            `Please select deadline before ${formatDate(maxEnd)}.`
           );
         }
         const totalMinutes = durationMinutes;
@@ -343,8 +354,8 @@ export default function EditTask() {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          const maxEnd = new Date(today);
-          maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
+          // const maxEnd = new Date(today);
+          // maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
           const scheduleEnd = maxEnd;
 
           try {
@@ -477,7 +488,6 @@ export default function EditTask() {
               scheduleStart: today,
               scheduleEnd,
             });
-            console.log("after autoscheudle");
 
             // ===== 8. CLEAR AFFECTED SCHEDULES =====
             const affectedTaskIds = reschedulableTasks
@@ -525,6 +535,8 @@ export default function EditTask() {
         // Selected date at 00:00
         const startDate = new Date(date);
         startDate.setHours(0, 0, 0, 0);
+        const maxEnd = new Date(today);
+        maxEnd.setDate(maxEnd.getDate() + MAX_LOOKAHEAD_DAYS);
 
         // Date validation
         if (startDate < today) {
@@ -540,6 +552,14 @@ export default function EditTask() {
             );
           }
         }
+
+        if (startDate >= maxEnd) {
+          return Alert.alert(
+            "Invalid Deadline",
+            `Please select deadline before ${formatDate(maxEnd)}.`
+          );
+        }
+
         /* ---------- MANUAL TASK ---------- */
         let startM = startMinutes;
         let endM = endMinutes;
@@ -572,6 +592,14 @@ export default function EditTask() {
         try {
           await db.runAsync("BEGIN TRANSACTION");
           let taskId;
+          let totalDuration = endM - startM;
+          let deadlineDay = new Date(selectedDate);
+          deadlineDay.setHours(0, 0, 0, 0);
+
+          if (startM > endM) {
+            deadlineDay.setDate(deadlineDay.getDate() + 1);
+            totalDuration = 1440 - startM + endM;
+          }
 
           if (mode === "add") {
             const res = await db.runAsync(
@@ -582,10 +610,10 @@ export default function EditTask() {
                 taskName.trim(),
                 null,
                 0,
-                null,
-                null,
-                null,
-                null,
+                deadlineDay.toLocaleDateString("sv-SE"),
+                endM,
+                totalDuration,
+                totalDuration,
                 new Date().toISOString(),
               ]
             );
@@ -597,7 +625,16 @@ export default function EditTask() {
               `UPDATE tasks SET
           title=?, priority=?, is_auto=?, deadline_date=?, deadline_minutes=?, total_duration=?, duration_left=?
          WHERE id=?`,
-              [taskName.trim(), null, 0, null, null, null, null, taskId]
+              [
+                taskName.trim(),
+                null,
+                0,
+                deadlineDay.toLocaleDateString("sv-SE"),
+                endM,
+                totalDuration,
+                totalDuration,
+                taskId,
+              ]
             );
 
             await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [

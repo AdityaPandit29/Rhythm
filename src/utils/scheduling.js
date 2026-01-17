@@ -94,10 +94,146 @@ export const groupBusyBlocks = (blocks) => {
   return Object.values(grouped);
 };
 
+// export const cleanupExpiredTasks = async (db) => {
+//   const now = new Date();
+//   const today = now.toLocaleDateString("sv-SE");
+//   const minutesNow = now.getHours() * 60 + now.getMinutes();
+
+//   const rows = await db.getAllAsync(
+//     `
+//       SELECT id
+//       FROM tasks
+//       WHERE
+//         deadline_date < ?
+//         OR (deadline_date = ? AND deadline_minutes < ?)
+//       ;
+//     `,
+//     [today, today, minutesNow]
+//   );
+
+//   if (rows.length === 0) return;
+
+//   const taskIds = rows.map((r) => r.id);
+//   const placeholders = taskIds.map(() => "?").join(",");
+
+//   await db.runAsync("BEGIN TRANSACTION");
+
+//   try {
+//     await db.runAsync(
+//       `
+//       DELETE FROM task_schedules
+//       WHERE taskId IN (${placeholders});
+//       `,
+//       taskIds
+//     );
+
+//     await db.runAsync(
+//       `
+//       DELETE FROM tasks
+//       WHERE id IN (${placeholders});
+//       `,
+//       taskIds
+//     );
+
+//     await db.runAsync("COMMIT");
+//   } catch (err) {
+//     await db.runAsync("ROLLBACK");
+//     throw err;
+//   }
+// };
 // ============================================
 // CALENDAR BUILDING
 // ============================================
 
+export const cleanupExpiredTasks = async (db) => {
+  const now = new Date();
+  // const today = now.toLocaleDateString("sv-SE");
+  // const minutesNow = now.getHours() * 60 + now.getMinutes();
+
+  const schedules = await db.getAllAsync(`
+  SELECT taskId, date, end_minutes
+  FROM task_schedules
+
+  UNION ALL
+
+  SELECT id AS taskId, deadline_date AS date, deadline_minutes AS end_minutes
+  FROM tasks
+  WHERE total_duration = 0
+
+  ORDER BY taskId, date, end_minutes;
+`);
+
+  const lastScheduleByTask = new Map();
+
+  for (const row of schedules) {
+    // Since rows are ordered, later rows overwrite earlier ones
+    lastScheduleByTask.set(row.taskId, row);
+  }
+
+  const expiredTaskIds = [];
+
+  for (const [taskId, row] of lastScheduleByTask.entries()) {
+    const endTime = new Date(row.date);
+    endTime.setHours(0, 0, 0, 0);
+    endTime.setMinutes(row.end_minutes);
+
+    if (endTime < now) {
+      expiredTaskIds.push(taskId);
+    }
+  }
+
+  if (expiredTaskIds.length === 0) return;
+
+  const placeholders = expiredTaskIds.map(() => "?").join(",");
+
+  await db.runAsync("BEGIN TRANSACTION");
+
+  try {
+    await db.runAsync(
+      `DELETE FROM task_schedules WHERE taskId IN (${placeholders})`,
+      expiredTaskIds
+    );
+
+    await db.runAsync(
+      `DELETE FROM tasks WHERE id IN (${placeholders})`,
+      expiredTaskIds
+    );
+
+    await db.runAsync("COMMIT");
+  } catch (err) {
+    await db.runAsync("ROLLBACK");
+    throw err;
+  }
+
+  // if (rows.length === 0) return;
+
+  // const taskIds = rows.map((r) => r.id);
+
+  // await db.runAsync("BEGIN TRANSACTION");
+
+  // try {
+  //   await db.runAsync(
+  //     `
+  //     DELETE FROM task_schedules
+  //     WHERE taskId IN (${placeholders});
+  //     `,
+  //     taskIds
+  //   );
+
+  //   await db.runAsync(
+  //     `
+  //     DELETE FROM tasks
+  //     WHERE id IN (${placeholders});
+  //     `,
+  //     taskIds
+  //   );
+
+  //   await db.runAsync("COMMIT");
+  // } catch (err) {
+  //   await db.runAsync("ROLLBACK");
+  //   throw err;
+  // }
+};
 /**
  * Add busy block to calendar
  */

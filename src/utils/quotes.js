@@ -2,7 +2,6 @@
 export const quotes = [
   "Discipline is choosing between what you want now and what you want most.",
   "You do not rise to the level of your goals. You fall to the level of your systems.",
-  "A calm mind is a sharp blade.",
   "Consistency turns ordinary days into extraordinary outcomes.",
   "The future is built in the hours no one applauds.",
   "Your habits decide your direction long before you notice the distance.",
@@ -11,7 +10,6 @@ export const quotes = [
   "The moment you want to quit is the moment you need to remember why you started.",
   "The pain of discipline is lighter than the pain of regret.",
   "Nothing changes if nothing changes.",
-  "Work quietly. Let results make the noise.",
   "Focus is not saying yes to what matters. It is saying no to what doesn’t.",
   "Time doesn’t get lost. It gets traded.",
   "A better life requires better boundaries.",
@@ -29,5 +27,6 @@ export const quotes = [
   "The difference between who you are and who you want to be is what you do daily.",
   "You become what you repeat.",
   "Make it easy to start and hard to stop.",
-  "If you want a different outcome, build a different routine.",
+
+  "if you focus on 'why' then 'how' become easy.",
 ];

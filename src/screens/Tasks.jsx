@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
 import TaskCard from "../components/TaskCard";
+import { cleanupExpiredTasks } from "../utils/scheduling.js";
 
 export default function Tasks() {
   const navigation = useNavigation();
@@ -95,8 +96,13 @@ export default function Tasks() {
     }
   };
 
+  const refreshTasks = async () => {
+    await cleanupExpiredTasks(db);
+    await loadTasks();
+  };
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", loadTasks);
+    const unsubscribe = navigation.addListener("focus", refreshTasks);
     return unsubscribe;
   }, [navigation]);
 
