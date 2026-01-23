@@ -1,0 +1,5 @@
+1. date inconsistency due ISOstring -> i used localDateString in sweden format ("sv-SE"). i used this because it is easier to parse to a date object.
+2. problem of not getting any meaningfull free time(why is the user living???) -> tasks will be scheduled only in a specific window which is of 7 days before the deadline
+3. Overlapping dur to wrong overnight logic on poorly designed tables -> changed tables
+4. when an auto task is going on then if we add a manual block whose start time is later than the end time of the ongoing task, then the task is getting resheduled due to rebalancing.
+5. 

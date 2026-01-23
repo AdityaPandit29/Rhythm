@@ -94,56 +94,24 @@ export const groupBusyBlocks = (blocks) => {
   return Object.values(grouped);
 };
 
-// export const cleanupExpiredTasks = async (db) => {
-//   const now = new Date();
-//   const today = now.toLocaleDateString("sv-SE");
-//   const minutesNow = now.getHours() * 60 + now.getMinutes();
+export const getNextWorkingDate = (days) => {
+  let today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let todayDow = today.getDay();
+  let nextDow = 0;
 
-//   const rows = await db.getAllAsync(
-//     `
-//       SELECT id
-//       FROM tasks
-//       WHERE
-//         deadline_date < ?
-//         OR (deadline_date = ? AND deadline_minutes < ?)
-//       ;
-//     `,
-//     [today, today, minutesNow]
-//   );
+  for (let i = todayDow; i < todayDow + 7; i++) {
+    if (days[i % 7]) {
+      nextDow = i % 7;
+      break;
+    }
+  }
 
-//   if (rows.length === 0) return;
+  let nextDate = new Date(today);
+  nextDate.setDate(nextDate.getDate() + ((nextDow - todayDow + 7) % 7));
 
-//   const taskIds = rows.map((r) => r.id);
-//   const placeholders = taskIds.map(() => "?").join(",");
-
-//   await db.runAsync("BEGIN TRANSACTION");
-
-//   try {
-//     await db.runAsync(
-//       `
-//       DELETE FROM task_schedules
-//       WHERE taskId IN (${placeholders});
-//       `,
-//       taskIds
-//     );
-
-//     await db.runAsync(
-//       `
-//       DELETE FROM tasks
-//       WHERE id IN (${placeholders});
-//       `,
-//       taskIds
-//     );
-
-//     await db.runAsync("COMMIT");
-//   } catch (err) {
-//     await db.runAsync("ROLLBACK");
-//     throw err;
-//   }
-// };
-// ============================================
-// CALENDAR BUILDING
-// ============================================
+  return nextDate;
+};
 
 export const cleanupExpiredTasks = async (db) => {
   const now = new Date();
@@ -151,17 +119,17 @@ export const cleanupExpiredTasks = async (db) => {
   // const minutesNow = now.getHours() * 60 + now.getMinutes();
 
   const schedules = await db.getAllAsync(`
-  SELECT taskId, date, end_minutes
-  FROM task_schedules
+    SELECT taskId, date, end_minutes
+    FROM task_schedules
 
-  UNION ALL
+    UNION ALL
 
-  SELECT id AS taskId, deadline_date AS date, deadline_minutes AS end_minutes
-  FROM tasks
-  WHERE total_duration = 0
+    SELECT id AS taskId, deadline_date AS date, deadline_minutes AS end_minutes
+    FROM tasks
+    WHERE total_duration = 0
 
-  ORDER BY taskId, date, end_minutes;
-`);
+    ORDER BY taskId, date, end_minutes;
+  `);
 
   const lastScheduleByTask = new Map();
 
@@ -191,12 +159,12 @@ export const cleanupExpiredTasks = async (db) => {
   try {
     await db.runAsync(
       `DELETE FROM task_schedules WHERE taskId IN (${placeholders})`,
-      expiredTaskIds
+      expiredTaskIds,
     );
 
     await db.runAsync(
       `DELETE FROM tasks WHERE id IN (${placeholders})`,
-      expiredTaskIds
+      expiredTaskIds,
     );
 
     await db.runAsync("COMMIT");
@@ -204,36 +172,11 @@ export const cleanupExpiredTasks = async (db) => {
     await db.runAsync("ROLLBACK");
     throw err;
   }
-
-  // if (rows.length === 0) return;
-
-  // const taskIds = rows.map((r) => r.id);
-
-  // await db.runAsync("BEGIN TRANSACTION");
-
-  // try {
-  //   await db.runAsync(
-  //     `
-  //     DELETE FROM task_schedules
-  //     WHERE taskId IN (${placeholders});
-  //     `,
-  //     taskIds
-  //   );
-
-  //   await db.runAsync(
-  //     `
-  //     DELETE FROM tasks
-  //     WHERE id IN (${placeholders});
-  //     `,
-  //     taskIds
-  //   );
-
-  //   await db.runAsync("COMMIT");
-  // } catch (err) {
-  //   await db.runAsync("ROLLBACK");
-  //   throw err;
-  // }
 };
+
+// ============================================
+// CALENDAR BUILDING
+// ============================================
 /**
  * Add busy block to calendar
  */
@@ -324,14 +267,14 @@ export const computeAuthority = ({
     daysUntil <= 1
       ? 10
       : daysUntil <= 3
-      ? 6
-      : daysUntil <= 7
-      ? 4
-      : daysUntil <= 14
-      ? 2.5
-      : daysUntil <= 28
-      ? 1.5
-      : 1;
+        ? 6
+        : daysUntil <= 7
+          ? 4
+          : daysUntil <= 14
+            ? 2.5
+            : daysUntil <= 28
+              ? 1.5
+              : 1;
 
   // Duration factor (longer tasks need earlier scheduling)
   const durationFactor = Math.log(Math.max(duration, 1)) / Math.log(10);
@@ -384,7 +327,7 @@ export const autoSchedule = ({
 }) => {
   const results = [];
   const AUTO_EVENT_BUFFER = 20; // 20 min buffer before auto events
-  const START_FROM_CURRENT_TIME_BUFFER = 5;
+  // const START_FROM_CURRENT_TIME_BUFFER = 5;
 
   // Create mutable calendar copy
   const workingCalendar = { ...calendar };
@@ -402,7 +345,7 @@ export const autoSchedule = ({
     // Calculate scheduling window
     const now = new Date();
     const daysToDeadline = Math.floor(
-      (taskDeadline - now) / (1000 * 60 * 60 * 24)
+      (taskDeadline - now) / (1000 * 60 * 60 * 24),
     );
     const windowStartDays = Math.max(0, daysToDeadline - 7); // 7 days before deadline
     const windowEndDays = daysToDeadline;
@@ -422,7 +365,7 @@ export const autoSchedule = ({
       dDay.setHours(0, 0, 0, 0);
 
       const daysFromScheduleStart = Math.floor(
-        (dDay - scheduleStartDay) / (1000 * 60 * 60 * 24)
+        (dDay - scheduleStartDay) / (1000 * 60 * 60 * 24),
       );
 
       // SPREAD: Only schedule within window
@@ -461,7 +404,7 @@ export const autoSchedule = ({
 
           // Must have free slot at midnight next day
           const midnightFree = nextDayFreeSlots.find(
-            (slot) => slot.start <= 0 && slot.end >= timeIntoNextDay
+            (slot) => slot.start <= 0 && slot.end >= timeIntoNextDay,
           );
 
           if (!midnightFree) {
@@ -527,7 +470,7 @@ export const autoSchedule = ({
 
           nextDayBusy.push({ start: 0, end: secondPartDuration });
           workingCalendar[nextDayKey] = nextDayBusy.sort(
-            (a, b) => a.start - b.start
+            (a, b) => a.start - b.start,
           );
         } else {
           // Same day
@@ -552,7 +495,7 @@ export const autoSchedule = ({
 
     if (!scheduled) {
       throw new Error(
-        `No suitable slot found for "${task.title}" before deadline.`
+        `No suitable slot found for "${task.title}" before deadline.`,
       );
     }
   }
@@ -560,7 +503,7 @@ export const autoSchedule = ({
   return results;
 };
 
-export const rebalance = async (db, type) => {
+export const rebalance = async (db, type, startDate, startMinutes) => {
   try {
     const blocks = await loadManualBlocks(db);
     const busyItems = groupBusyBlocks(blocks);
@@ -574,10 +517,30 @@ export const rebalance = async (db, type) => {
 
     let existingAutoTasks = [];
 
-    existingAutoTasks = await db.getAllAsync(`
-      SELECT * FROM tasks
-      WHERE is_auto = 1 AND total_duration > 0  
-    `);
+    existingAutoTasks = await db.getAllAsync(
+      `
+      SELECT DISTINCT 
+        t.id,
+        t.title, 
+        t.priority, 
+        t.deadline_date, 
+        t.deadline_minutes, 
+        t.total_duration 
+      FROM tasks t
+      JOIN task_schedules ts
+      ON t.id = ts.taskID 
+      WHERE 
+        t.is_auto = 1 
+        AND 
+          (ts.date > ? 
+          OR 
+          (ts.date = ? AND ts.end_minutes > ?)) 
+        AND 
+        t.total_duration > 0
+    `,
+
+      [startDate, startDate, startMinutes],
+    );
 
     const mappedAutoTasks = existingAutoTasks.map((t) => ({
       id: t.id,
@@ -593,6 +556,8 @@ export const rebalance = async (db, type) => {
         duration: t.total_duration,
       }),
     }));
+
+    console.log(mappedAutoTasks);
 
     const calendar = buildCalendar({
       busyItems: busyItems,
@@ -614,7 +579,7 @@ export const rebalance = async (db, type) => {
       await db.runAsync(
         `DELETE FROM task_schedules
         WHERE taskId IN (${taskIds.map(() => "?").join(",")})`,
-        taskIds
+        taskIds,
       );
     }
 
@@ -629,13 +594,13 @@ export const rebalance = async (db, type) => {
           s.start_minutes,
           s.end_minutes,
           s.end_minutes - s.start_minutes,
-        ]
+        ],
       );
     }
   } catch (err) {
     if (type !== "rebalance") {
       throw new Error(
-        `Due to this ${type} some tasks will not meet their deadline.`
+        `Due to this ${type} some tasks will not meet their deadline.`,
       );
     } else {
       throw new Error(`Rebalance failed.`);

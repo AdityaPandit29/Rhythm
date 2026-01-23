@@ -72,7 +72,7 @@ export default function EditTask() {
       now.getDate(),
       0,
       0,
-      0
+      0,
     );
     date.setMinutes(minutes);
     return date;
@@ -85,17 +85,17 @@ export default function EditTask() {
   const [deadlineDate, setDeadlineDate] = useState(
     existing?.deadlineDate
       ? new Date(existing.deadlineDate)
-      : new Date(new Date().setHours(0, 0, 0, 0))
+      : new Date(new Date().setHours(0, 0, 0, 0)),
   );
 
   const [deadlineMinutes, setDeadlineMinutes] = useState(
-    existing?.deadlineMinutes ?? 1439
+    existing?.deadlineMinutes ?? 1439,
   );
 
   const [date, setDate] = useState(
     existing?.scheduledDate
       ? new Date(existing.scheduledDate)
-      : new Date(new Date().setHours(0, 0, 0, 0))
+      : new Date(new Date().setHours(0, 0, 0, 0)),
   );
 
   const duration = existing?.durationLeft ?? 0;
@@ -103,10 +103,12 @@ export default function EditTask() {
   // const [selectedHours, setSelectedHours] = useState(Math.floor(duration / 60));
 
   // const [selectedMinutes, setSelectedMinutes] = useState(duration % 60);
-  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [durationMinutes, setDurationMinutes] = useState(
+    existing?.totalDuration ?? 30,
+  );
 
   const [startMinutes, setStartMinutes] = useState(
-    existing?.startMinutes ?? 1080
+    existing?.startMinutes ?? 1080,
   );
   const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1140);
 
@@ -292,13 +294,13 @@ export default function EditTask() {
         ) {
           return Alert.alert(
             "Invalid Deadline",
-            "Deadline cannot be in the past."
+            "Deadline cannot be in the past.",
           );
         }
         if (deadlineDay >= maxEnd) {
           return Alert.alert(
             "Invalid Deadline",
-            `Please select deadline before ${formatDate(maxEnd)}.`
+            `Please select deadline before ${formatDate(maxEnd)}.`,
           );
         }
         const totalMinutes = durationMinutes;
@@ -318,7 +320,7 @@ export default function EditTask() {
                 0,
                 null,
                 new Date().toISOString(),
-              ]
+              ],
             );
           } else {
             const taskId = existing.id;
@@ -340,7 +342,7 @@ export default function EditTask() {
                 0,
                 null,
                 taskId,
-              ]
+              ],
             );
           }
         } else {
@@ -379,7 +381,7 @@ export default function EditTask() {
                   totalMinutes,
                   totalMinutes,
                   taskId,
-                ]
+                ],
               );
 
               // Free current task's existing schedules
@@ -399,7 +401,7 @@ export default function EditTask() {
                   totalMinutes,
                   totalMinutes,
                   new Date().toISOString(),
-                ]
+                ],
               );
               taskId = insertResult.lastInsertRowId;
             }
@@ -410,7 +412,7 @@ export default function EditTask() {
               `SELECT * FROM tasks
                 WHERE is_auto = 1 AND total_duration > 0 AND id != ?
                 `,
-              [taskId]
+              [taskId],
             );
 
             const mappedAutoTasks = existingAutoTasks.map((t) => ({
@@ -466,7 +468,7 @@ export default function EditTask() {
                FROM task_schedules ts
                JOIN tasks t ON ts.taskId = t.id
                WHERE ts.taskId IN (${fixedIds.map(() => "?").join(",")})`,
-                fixedIds
+                fixedIds,
               );
             }
 
@@ -483,7 +485,7 @@ export default function EditTask() {
             const scheduledResults = autoSchedule({
               calendar,
               autoTasks: reschedulableTasks.sort(
-                (a, b) => b.authority - a.authority
+                (a, b) => b.authority - a.authority,
               ),
               scheduleStart: today,
               scheduleEnd,
@@ -498,7 +500,7 @@ export default function EditTask() {
               await db.runAsync(
                 `DELETE FROM task_schedules
                WHERE taskId IN (${affectedTaskIds.map(() => "?").join(",")})`,
-                affectedTaskIds
+                affectedTaskIds,
               );
             }
 
@@ -514,7 +516,7 @@ export default function EditTask() {
                   s.start_minutes,
                   s.end_minutes,
                   s.end_minutes - s.start_minutes,
-                ]
+                ],
               );
             }
 
@@ -548,7 +550,7 @@ export default function EditTask() {
           if (startMinutes <= now.getHours() * 60 + now.getMinutes()) {
             return Alert.alert(
               "Invalid Time",
-              "Time must be later than the current time."
+              "Time must be later than the current time.",
             );
           }
         }
@@ -556,7 +558,7 @@ export default function EditTask() {
         if (startDate >= maxEnd) {
           return Alert.alert(
             "Invalid Deadline",
-            `Please select deadline before ${formatDate(maxEnd)}.`
+            `Please select deadline before ${formatDate(maxEnd)}.`,
           );
         }
 
@@ -568,7 +570,7 @@ export default function EditTask() {
         if (startM === endM) {
           return Alert.alert(
             "Invalid Time",
-            "End time must be differ from start time."
+            "End time must be differ from start time.",
           );
         }
 
@@ -584,7 +586,7 @@ export default function EditTask() {
         if (conflict) {
           return Alert.alert(
             "Time Conflict",
-            `This task overlaps with ${conflict.type}: "${conflict.title}".`
+            `This task overlaps with ${conflict.type}: "${conflict.title}".`,
           );
         }
 
@@ -615,7 +617,7 @@ export default function EditTask() {
                 totalDuration,
                 totalDuration,
                 new Date().toISOString(),
-              ]
+              ],
             );
             taskId = res.lastInsertRowId;
           } else {
@@ -634,7 +636,7 @@ export default function EditTask() {
                 totalDuration,
                 totalDuration,
                 taskId,
-              ]
+              ],
             );
 
             await db.runAsync(`DELETE FROM task_schedules WHERE taskId=?`, [
@@ -654,7 +656,7 @@ export default function EditTask() {
                 startM,
                 1440,
                 1440 - startM,
-              ]
+              ],
             );
 
             const nextDate = new Date(selectedDate);
@@ -664,7 +666,7 @@ export default function EditTask() {
               `INSERT INTO task_schedules
           (taskId, date, start_minutes, end_minutes, duration)
           VALUES (?, ?, ?, ?, ?)`,
-              [taskId, nextDate.toLocaleDateString("sv-SE"), 0, endM, endM]
+              [taskId, nextDate.toLocaleDateString("sv-SE"), 0, endM, endM],
             );
           } else {
             await db.runAsync(
@@ -677,12 +679,17 @@ export default function EditTask() {
                 startM,
                 endM,
                 endM - startM,
-              ]
+              ],
             );
           }
 
           //REBALANCE
-          await rebalance(db, "task");
+          await rebalance(
+            db,
+            "habit",
+            selectedDate.toLocaleDateString("sv-SE"),
+            startM,
+          );
 
           await db.runAsync("COMMIT");
         } catch (error) {
@@ -690,7 +697,7 @@ export default function EditTask() {
           console.log(error.message);
 
           throw new Error(
-            error?.message || "Rebalance after scheduling task failed"
+            error?.message || "Rebalance after scheduling task failed",
           );
         }
       }
@@ -700,7 +707,7 @@ export default function EditTask() {
       // console.error("validateAndSave (task) error:", err);
       Alert.alert(
         "Save Failed",
-        err?.message || "Something went wrong while saving the task."
+        err?.message || "Something went wrong while saving the task.",
       );
     }
   };
@@ -998,8 +1005,8 @@ export default function EditTask() {
               activeTimePicker === "start"
                 ? minutesToDate(startMinutes)
                 : activeTimePicker === "end"
-                ? minutesToDate(endMinutes)
-                : minutesToDate(deadlineMinutes)
+                  ? minutesToDate(endMinutes)
+                  : minutesToDate(deadlineMinutes)
             }
             mode="time"
             display="spinner"

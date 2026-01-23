@@ -19,6 +19,7 @@ import {
   loadManualBlocks,
   rebalance,
   cleanupExpiredTasks,
+  getNextWorkingDate,
 } from "../utils/scheduling.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -38,7 +39,7 @@ export default function EditHabit() {
   const [days, setDays] = useState(existing?.days ?? Array(7).fill(false));
 
   const [startMinutes, setStartMinutes] = useState(
-    existing?.startMinutes ?? 1080
+    existing?.startMinutes ?? 1080,
   );
   const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1140);
   const [activePicker, setActivePicker] = useState(null); // "start" or "end"
@@ -64,7 +65,7 @@ export default function EditHabit() {
       now.getDate(),
       0,
       0,
-      0
+      0,
     );
     date.setMinutes(minutes);
     return date;
@@ -185,7 +186,7 @@ export default function EditHabit() {
       if (conflict) {
         return Alert.alert(
           "Time Conflict",
-          `This habit overlaps with ${conflict.type}: "${conflict.title}".`
+          `This habit overlaps with ${conflict.type}: "${conflict.title}".`,
         );
       }
       await db.runAsync("BEGIN TRANSACTION");
@@ -196,7 +197,7 @@ export default function EditHabit() {
           `INSERT INTO habits
             (title)
             VALUES (?)`,
-          [habitName.trim()]
+          [habitName.trim()],
         );
         const newId = result.lastInsertRowId;
         if (!newId)
@@ -208,17 +209,17 @@ export default function EditHabit() {
             if (startM < endM) {
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, i, startM, endM]
+                [newId, i, startM, endM],
               );
             } else {
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, i, startM, 1440]
+                [newId, i, startM, 1440],
               );
 
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, (i + 1) % 7, 0, endM]
+                [newId, (i + 1) % 7, 0, endM],
               );
             }
           }
@@ -230,7 +231,7 @@ export default function EditHabit() {
           `UPDATE habits SET
               title=?
             WHERE id=?`,
-          [habitName.trim(), existing.id]
+          [habitName.trim(), existing.id],
         );
 
         await db.runAsync(`DELETE FROM habit_schedules WHERE habitId=?`, [
@@ -242,25 +243,32 @@ export default function EditHabit() {
             if (startM < endM) {
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, i, startM, endM]
+                [existing.id, i, startM, endM],
               );
             } else {
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, i, startM, 1440]
+                [existing.id, i, startM, 1440],
               );
 
               await db.runAsync(
                 `INSERT INTO habit_schedules (habitId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, (i + 1) % 7, 0, endM]
+                [existing.id, (i + 1) % 7, 0, endM],
               );
             }
           }
         }
       }
 
+      const nextWorkingDate = getNextWorkingDate(days);
+
       //REBALANCE
-      await rebalance(db, "habit");
+      await rebalance(
+        db,
+        "habit",
+        nextWorkingDate.toLocaleDateString("sv-SE"),
+        startM,
+      );
 
       await db.runAsync("COMMIT");
 
@@ -271,7 +279,7 @@ export default function EditHabit() {
       // console.error("validateAndSave (habit) error:", err);
       Alert.alert(
         "Save Failed",
-        err?.message || "Something went wrong while saving the habit."
+        err?.message || "Something went wrong while saving the habit.",
       );
     }
   };

@@ -19,6 +19,7 @@ import {
   loadManualBlocks,
   rebalance,
   cleanupExpiredTasks,
+  getNextWorkingDate,
 } from "../utils/scheduling.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
@@ -40,7 +41,7 @@ export default function EditRoutine() {
   const [label, setLabel] = useState(existing.label ?? "");
 
   const [startMinutes, setStartMinutes] = useState(
-    existing?.startMinutes ?? 540
+    existing?.startMinutes ?? 540,
   );
   const [endMinutes, setEndMinutes] = useState(existing?.endMinutes ?? 1020);
   const [activePicker, setActivePicker] = useState(null); // "start" or "end"
@@ -66,7 +67,7 @@ export default function EditRoutine() {
       now.getDate(),
       0,
       0,
-      0
+      0,
     );
     date.setMinutes(minutes);
     return date;
@@ -188,7 +189,7 @@ export default function EditRoutine() {
       if (conflict) {
         return Alert.alert(
           "Time Conflict",
-          `This routine overlaps with ${conflict.type}: "${conflict.title}".`
+          `This routine overlaps with ${conflict.type}: "${conflict.title}".`,
         );
       }
       await db.runAsync("BEGIN TRANSACTION");
@@ -199,7 +200,7 @@ export default function EditRoutine() {
           `INSERT INTO routines 
             (title)
           VALUES (?);`,
-          [label.trim()]
+          [label.trim()],
         );
         const newId = result.lastInsertRowId;
 
@@ -213,17 +214,17 @@ export default function EditRoutine() {
             if (startM < endM) {
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, i, startM, endM]
+                [newId, i, startM, endM],
               );
             } else {
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, i, startM, 1440]
+                [newId, i, startM, 1440],
               );
 
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [newId, (i + 1) % 7, 0, endM]
+                [newId, (i + 1) % 7, 0, endM],
               );
             }
           }
@@ -235,7 +236,7 @@ export default function EditRoutine() {
           `UPDATE routines SET 
             title=?
           WHERE id=?`,
-          [label.trim(), existing.id]
+          [label.trim(), existing.id],
         );
 
         // delete old days
@@ -249,25 +250,32 @@ export default function EditRoutine() {
             if (startM < endM) {
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, i, startM, endM]
+                [existing.id, i, startM, endM],
               );
             } else {
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, i, startM, 1440]
+                [existing.id, i, startM, 1440],
               );
 
               await db.runAsync(
                 `INSERT INTO routine_schedules (routineId, day, start_minutes, end_minutes) VALUES (?, ?, ?, ?);`,
-                [existing.id, (i + 1) % 7, 0, endM]
+                [existing.id, (i + 1) % 7, 0, endM],
               );
             }
           }
         }
       }
 
+      const nextWorkingDate = getNextWorkingDate(days);
+
       //REBALANCE
-      await rebalance(db, "routine");
+      await rebalance(
+        db,
+        "routine",
+        nextWorkingDate.toLocaleDateString("sv-SE"),
+        startM,
+      );
 
       await db.runAsync("COMMIT");
       console.log("Routine saved successfully.");
@@ -277,7 +285,7 @@ export default function EditRoutine() {
       // console.error("validateAndSave (routine) error:", err);
       Alert.alert(
         "Save Failed",
-        err?.message || "Something went wrong while saving the routine."
+        err?.message || "Something went wrong while saving the routine.",
       );
     }
   };
