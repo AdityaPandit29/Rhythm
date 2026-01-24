@@ -9,27 +9,27 @@ import { useCallback } from "react";
 
 const loadAllBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
-    SELECT
-      r.start_minutes AS start_minutes,
-      r.end_minutes AS end_minutes,
-      d.day AS day,
+    SELECT 
+      rs.start_minutes AS start_minutes,
+      rs.end_minutes AS end_minutes,
+      rs.day AS day,
       'routine' AS type,
       r.id AS itemId,
       r.title AS title
-    FROM routines r
-    LEFT JOIN routine_days d ON r.id = d.routineId
+    FROM routine_schedules rs
+    LEFT JOIN routines r ON rs.routineId = r.id
 
     UNION ALL
 
-    SELECT
-      h.start_minutes AS start_minutes,
-      h.end_minutes AS end_minutes,
-      hd.day AS day,
+    SELECT 
+      hs.start_minutes AS start_minutes,
+      hs.end_minutes AS end_minutes,
+      hs.day AS day,
       'habit' AS type,
       h.id AS itemId,
       h.title AS title
-    FROM habits h
-    LEFT JOIN habit_days hd ON h.id = hd.habitId
+    FROM habit_schedules hs
+    LEFT JOIN habits h ON hs.habitId = h.id
   `);
 
   const tasks = await db.getAllAsync(`
@@ -42,192 +42,248 @@ const loadAllBlocks = async (db) => {
       t.title AS title
     FROM task_schedules ts
     LEFT JOIN tasks t ON ts.taskId = t.id
-    WHERE (is_auto == 1 AND t.total_duration != 0) OR (is_auto == 0);
+    WHERE (t.is_auto = 0) OR (t.is_auto == 1 AND t.total_duration != 0);
   `);
 
-  return { recurring, tasks };
+  return [...recurring, ...tasks];
 };
 
-const isTimeInRange = (nowMin, start, end) => {
-  // normal (same day)
-  if (start <= end) {
-    return nowMin >= start && nowMin < end;
-  }
+const todayKey = () => new Date().toLocaleDateString("sv-SE");
 
-  // overnight (e.g. 1300 → 500)
-  return nowMin >= start || nowMin < end;
+const tomorrowKey = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString("sv-SE");
+};
+
+const minutesNow = () => {
+  const n = new Date();
+  return n.getHours() * 60 + n.getMinutes();
 };
 
 const getCurrentBlock = (blocks) => {
-  const now = new Date();
-  const todayKey = now.toLocaleDateString("sv-SE");
-  const todayDayIndex = now.getDay(); // 0–6
-  const yesterdayDayIndex = (todayDayIndex + 6) % 7;
-  const minutesNow = now.getHours() * 60 + now.getMinutes();
+  const nowMin = minutesNow();
+  const today = todayKey();
+  const tomorrow = tomorrowKey();
+  const todayDay = new Date().getDay();
+  const tomorrowDay = (todayDay + 1) % 7;
 
-  let closestUpcoming = null;
+  const windowEndMin = nowMin + 15;
+
+  let upcomingCandidate = null;
 
   for (const block of blocks) {
-    // =============================
-    // HABITS & ROUTINES (recurring)
-    // =============================
-    if (block.type !== "task") {
-      const start = block.start_minutes;
-      const end = block.end_minutes;
+    for (const interval of block.intervals) {
+      /* ===========================
+         TASKS (date based)
+      =========================== */
+      if (block.type === "task") {
+        const { date, start, end } = interval;
 
-      const isOvernight = end < start;
+        // Handle overnight split task (already split in DB)
+        const isToday = date === today;
+        const isTomorrow = date === tomorrow;
 
-      const todayAllowed =
-        block.days.includes(todayDayIndex) ||
-        (isOvernight && block.days.includes(yesterdayDayIndex));
-
-      if (!todayAllowed) continue;
-
-      // Normalize timeline
-      const adjustedEnd = isOvernight ? end + 1440 : end;
-      const adjustedNow =
-        minutesNow < start && isOvernight ? minutesNow + 1440 : minutesNow;
-
-      // ONGOING
-      if (adjustedNow >= start && adjustedNow < adjustedEnd) {
-        return {
-          status: "ongoing",
-          type: block.type,
-          title: block.title,
-          start_minutes: start,
-          end_minutes: adjustedEnd % 1440,
-        };
-      }
-
-      // UPCOMING (only if start is ahead)
-      const diff = start - minutesNow;
-      if (diff > 0 && diff <= 10 && block.days.includes(todayDayIndex)) {
-        if (!closestUpcoming || diff < closestUpcoming.diff) {
-          closestUpcoming = {
-            status: "upcoming",
-            type: block.type,
-            title: block.title,
-            start_minutes: start,
-            diff,
-          };
-        }
-      }
-    }
-
-    // =============================
-    // TASKS (date-based, already split)
-    // =============================
-    else {
-      block.dates.forEach((date, i) => {
-        if (date !== todayKey) return;
-
-        const start = block.start_minutes[i];
-        const end = block.end_minutes[i];
-
-        // ONGOING
-        if (minutesNow >= start && minutesNow < end) {
-          let mergedStart = start;
-          let mergedEnd = end;
-
-          // check yesterday continuation
-          const yesterdayKey = new Date(
-            Date.now() - 24 * 60 * 60 * 1000
-          ).toLocaleDateString("sv-SE");
-
-          block.dates.forEach((d, j) => {
-            if (
-              d === yesterdayKey &&
-              block.end_minutes[j] === 1440 && // ended at midnight
-              start === 0 // today's part starts at midnight
-            ) {
-              mergedStart = block.start_minutes[j];
-              mergedEnd = end + 1440; // logical full span
-            }
-          });
-
-          closestUpcoming = {
+        /* ---- ONGOING ---- */
+        if (isToday && nowMin >= start && nowMin < end) {
+          return {
             status: "ongoing",
-            type: "task",
+            type: block.type,
+            id: block.id,
             title: block.title,
-            start_minutes: mergedStart,
-            end_minutes: mergedEnd % 1440,
+            start,
           };
         }
 
-        // UPCOMING
-        const diff = start - minutesNow;
-        if (diff > 0 && diff <= 10) {
-          if (!closestUpcoming || diff < closestUpcoming.diff) {
-            closestUpcoming = {
+        /* ---- UPCOMING ---- */
+        if (isToday && start > nowMin && start <= windowEndMin) {
+          if (!upcomingCandidate || start < upcomingCandidate.start) {
+            upcomingCandidate = {
               status: "upcoming",
-              type: "task",
+              type: block.type,
+              id: block.id,
               title: block.title,
-              start_minutes: start,
-              diff,
+              start,
             };
           }
         }
-      });
 
-      if (closestUpcoming?.status === "ongoing") return closestUpcoming;
+        // Midnight crossing case (11:59 → 00:02)
+        if (isTomorrow && windowEndMin >= 1440) {
+          const overflow = windowEndMin - 1440;
+          if (
+            start <= overflow &&
+            (!upcomingCandidate || start + 1440 < upcomingCandidate.start)
+          ) {
+            upcomingCandidate = {
+              status: "upcoming",
+              type: block.type,
+              id: block.id,
+              title: block.title,
+              start: start + 1440,
+            };
+          }
+        }
+      } else {
+        /* ===========================
+         HABITS / ROUTINES (weekly)
+      =========================== */
+        const { day, start, end } = interval;
+
+        // Handle overnight split task (already split in DB)
+        const isToday = day === todayDay;
+        const isTomorrow = day === tomorrowDay;
+
+        /* ---- ONGOING ---- */
+        if (isToday && nowMin >= start && nowMin < end) {
+          return {
+            status: "ongoing",
+            type: block.type,
+            id: block.id,
+            title: block.title,
+            start,
+          };
+        }
+
+        /* ---- UPCOMING ---- */
+        if (isToday && start > nowMin && start <= windowEndMin) {
+          if (!upcomingCandidate || start < upcomingCandidate.start) {
+            upcomingCandidate = {
+              status: "upcoming",
+              type: block.type,
+              id: block.id,
+              title: block.title,
+              start,
+            };
+          }
+        }
+
+        // Midnight crossing case (11:59 → 00:02)
+        if (isTomorrow && windowEndMin >= 1440) {
+          const overflow = windowEndMin - 1440;
+          if (
+            start <= overflow &&
+            (!upcomingCandidate || start + 1440 < upcomingCandidate.start)
+          ) {
+            upcomingCandidate = {
+              status: "upcoming",
+              type: block.type,
+              id: block.id,
+              title: block.title,
+              start: start + 1440,
+            };
+          }
+        }
+      }
     }
   }
 
-  // console.log("closestUpcoming : ", closestUpcoming);
+  if (upcomingCandidate) {
+    return upcomingCandidate;
+  }
 
-  return closestUpcoming || { status: "free" };
+  return { status: "free" };
 };
 
-const formatMinutes = (mins) => {
-  const h = String(Math.floor(mins / 60)).padStart(2, "0");
-  const m = String(mins % 60).padStart(2, "0");
-  return `${h}:${m}`;
+const getDuration = (grouped, id, type, status) => {
+  let curIntervals;
+  const now = new Date();
+  const curMinutes = now.getHours() * 60 + now.getMinutes();
+
+  for (const block of grouped) {
+    const curType = block.type;
+    const curId = block.id;
+
+    if (type === curType && curId === id) {
+      curIntervals = block.intervals;
+      break;
+    }
+  }
+
+  const isOvernight =
+    curIntervals.some((i) => i.end === 1440) &&
+    curIntervals.some((i) => i.start === 0);
+
+  let startMinutes, endMinutes;
+
+  if (isOvernight) {
+    const beforeMidnight = curIntervals.find((i) => i.end === 1440);
+    const afterMidnight = curIntervals.find((i) => i.start === 0);
+
+    startMinutes = beforeMidnight.start;
+    endMinutes = afterMidnight.end;
+  } else {
+    // non-overnight: exactly one interval
+    startMinutes = curIntervals[0].start;
+    endMinutes = curIntervals[0].end;
+  }
+
+  if (status === "ongoing") {
+    if (endMinutes === 0) return 1440;
+    if (curMinutes <= endMinutes) return endMinutes;
+    return 1440 + endMinutes;
+  } else if (status === "upcoming") {
+    if (startMinutes >= curMinutes) return startMinutes;
+    return 1440 + startMinutes;
+  }
+};
+
+const formatSeconds = (secs) => {
+  const h = String(Math.floor(secs / 3600)).padStart(2, "0");
+  const m = String(Math.floor(secs / 60 - h * 60)).padStart(2, "0");
+  const s = String(secs % 60).padStart(2, "0");
+  return `${h}:${m}:${s}`;
 };
 
 export default function Dashboard() {
   const db = useSQLiteContext();
 
-  const [blocks, setBlocks] = useState([]);
-  const [currentBlock, setCurrentBlock] = useState(null);
+  // const [blocks, setBlocks] = useState([]);
+  const [currentBlock, setCurrentBlock] = useState({ status: "free" });
 
   const load = useCallback(async () => {
-    const { recurring, tasks } = await loadAllBlocks(db);
-    const grouped = groupBusyBlocks(recurring, tasks);
-    // console.log("currentBlock : ", getCurrentBlock(grouped));
-    // console.log("grouped : ", grouped);
+    const blocks = await loadAllBlocks(db);
+    const grouped = groupBusyBlocks(blocks);
+    const curBlock = getCurrentBlock(grouped);
 
-    setBlocks(grouped);
-    setCurrentBlock(getCurrentBlock(grouped));
-    // console.log("currentBlock : ", currentBlock);
+    const { status, type, id, title } = curBlock;
+    if (status === "free")
+      setCurrentBlock({ status, type, id, title, duration: 0 });
+    else {
+      const duration = getDuration(grouped, id, type, status);
+      setCurrentBlock({ status, type, id, title, duration });
+    }
   }, [db]);
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-
+      let intervalId;
+      let timeoutId;
       const run = async () => {
         try {
-          if (!cancelled) await load();
+          await load();
         } catch (err) {
           console.error("Dashboard load error:", err);
         }
       };
 
-      run(); // refresh immediately on navigate/focus [web:41]
+      run();
+      // sync to next second
+      const now = Date.now();
+      const delay = 1000 - (now % 1000);
 
-      const interval = setInterval(run, 60 * 1000); // refresh every minute while focused [web:41]
+      timeoutId = setTimeout(() => {
+        run(); // first exact-second run
+
+        intervalId = setInterval(run, 1000); // every second
+      }, delay);
 
       return () => {
-        cancelled = true;
-        clearInterval(interval); // cleanup happens on blur/unmount [web:41]
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
       };
-    }, [load])
+    }, [load]),
   );
-
-  const block = currentBlock ?? { status: "free" };
-
-  // console.log("currentBlock : ", currentBlock);
-  // console.log("block : ", block);
 
   const statusMap = {
     ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },
@@ -235,25 +291,17 @@ export default function Dashboard() {
     free: { bg: "#DDD", color: "#555", label: "Free Time" },
   };
 
-  const status = statusMap[block.status] || statusMap.free;
+  const status = statusMap[currentBlock.status];
 
-  let mainTime = "00:00";
+  const now = new Date();
+  const nowSeconds =
+    now.getHours() * 60 * 60 + now.getMinutes() * 60 + now.getSeconds();
+  const finalSeconds = currentBlock.duration * 60;
 
-  if (block.status === "ongoing") {
-    const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const remaining =
-      block.end_minutes >= block.start_minutes
-        ? block.end_minutes - nowMin
-        : 1440 - nowMin + block.end_minutes;
+  let mainTime = "00:00:00";
 
-    mainTime = formatMinutes(Math.max(0, remaining));
-  }
-
-  if (block.status === "upcoming") {
-    mainTime = `${block.diff} min`;
-  }
-
+  if (currentBlock.status !== "free")
+    mainTime = formatSeconds(finalSeconds - nowSeconds);
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
@@ -286,13 +334,13 @@ export default function Dashboard() {
           <Text style={styles.mainTime}>{mainTime}</Text>
 
           <Text style={styles.subText}>
-            {block.status === "free"
+            {currentBlock.status === "free"
               ? "No ongoing event"
-              : `${block.type.toUpperCase()}: ${block.title}`}
+              : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
           </Text>
 
           {/* ACTION BUTTONS */}
-          {/* {block.status === "ongoing" && (
+          {/* {currentBlock.status === "ongoing" && (
             <TouchableOpacity style={styles.doneBtn}>
               <Text style={styles.btnText}>Mark Done</Text>
             </TouchableOpacity>

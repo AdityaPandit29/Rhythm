@@ -3,3 +3,16 @@
 3. Overlapping dur to wrong overnight logic on poorly designed tables -> changed tables
 4. when an auto task is going on then if we add a manual block whose start time is later than the end time of the ongoing task, then the task is getting resheduled due to rebalancing.
 5. 
+
+
+
+
+
+
+
+
+
+
+
+IMPORTANT POINTS - 
+useEffect depends on mounting, while useFocusEffect depends on navigation focus. Screens are lazy-loaded by default, so useEffect doesn’t run until the screen is mounted.
