@@ -6,6 +6,7 @@ import { groupBusyBlocks } from "../utils/scheduling.js";
 import { useSQLiteContext } from "expo-sqlite";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef } from "react";
+import { quotes } from "../utils/quotes.js";
 
 const START_WINDOW_RATIO = 0.2; // 20% of duration
 
@@ -472,10 +473,24 @@ const handleHabitStart = async (db, habitId) => {
   return null;
 };
 
+const handleTaskCompletion = async (db, taskId) => {
+  try {
+    // Delete dependent schedules first (correct order)
+    await db.runAsync(`DELETE FROM task_schedules WHERE taskId = ?`, [taskId]);
+
+    // Delete the task itself
+    await db.runAsync(`DELETE FROM tasks WHERE id = ?`, [taskId]);
+  } catch (err) {
+    console.error("Completion error:", err);
+    Alert.alert("Error", "Failed to complete task.");
+  }
+};
+
 export default function Dashboard() {
   const db = useSQLiteContext();
 
   const [currentBlock, setCurrentBlock] = useState({ status: "free" });
+  const [quote, setQuote] = useState("");
   const prevBlockRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -555,6 +570,11 @@ export default function Dashboard() {
     }, [load]),
   );
 
+  useEffect(() => {
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    setQuote(randomQuote);
+  }, []);
+
   const statusMap = {
     ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },
     upcoming: { bg: "#5CCF5C20", color: "#9b512eff", label: "Starting in" },
@@ -584,11 +604,9 @@ export default function Dashboard() {
 
       <View style={styles.contentWrapper}>
         {/* Quote */}
-        {/* <View style={styles.quoteContainer}>
-          <Text style={styles.quoteText}>
-            “Small progress is still progress.”
-          </Text>
-        </View> */}
+        <View style={styles.quoteContainer}>
+          <Text style={styles.quoteText}>"{quote}"</Text>
+        </View>
 
         {/* ----------------------------------------------------
            CARD 1: NEXT EVENT CARD
@@ -628,6 +646,19 @@ export default function Dashboard() {
                 }}
               >
                 <Text style={styles.btnText}>Start</Text>
+              </TouchableOpacity>
+            )}
+
+          {currentBlock.status === "ongoing" &&
+            currentBlock.type === "task" && (
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={async () => {
+                  await handleTaskCompletion(db, currentBlock.id);
+                  load(); // refresh blocks
+                }}
+              >
+                <Text style={styles.btnText}>Done</Text>
               </TouchableOpacity>
             )}
         </View>

@@ -95,7 +95,7 @@ export default function DatabaseSetup() {
       `);
 
       // console.log(res);
-      console.log(pes);
+      // console.log(pes);
     };
 
     createTables();
