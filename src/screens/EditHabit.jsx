@@ -175,6 +175,8 @@ export default function EditHabit() {
       const startM = startMinutes;
       const endM = endMinutes;
 
+      const duration = endM >= startM ? endM - startM : 1440 - startM + endM;
+
       await cleanupExpiredTasks(db);
 
       /* ---------- LOAD ALL BUSY BLOCKS ---------- */
@@ -195,9 +197,9 @@ export default function EditHabit() {
       if (mode === "add") {
         const result = await db.runAsync(
           `INSERT INTO habits
-            (title)
-            VALUES (?)`,
-          [habitName.trim()],
+            (title, duration)
+            VALUES (?, ?)`,
+          [habitName.trim(), duration],
         );
         const newId = result.lastInsertRowId;
         if (!newId)
@@ -229,9 +231,9 @@ export default function EditHabit() {
 
         await db.runAsync(
           `UPDATE habits SET
-              title=?
+              title=?, duration=?
             WHERE id=?`,
-          [habitName.trim(), existing.id],
+          [habitName.trim(), duration, existing.id],
         );
 
         await db.runAsync(`DELETE FROM habit_schedules WHERE habitId=?`, [
@@ -276,7 +278,7 @@ export default function EditHabit() {
       navigation.goBack();
     } catch (err) {
       await db.runAsync("ROLLBACK");
-      // console.error("validateAndSave (habit) error:", err);
+      console.error("validateAndSave (habit) error:", err);
       Alert.alert(
         "Save Failed",
         err?.message || "Something went wrong while saving the habit.",

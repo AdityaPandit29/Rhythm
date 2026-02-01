@@ -29,4 +29,5 @@ export const quotes = [
   "Make it easy to start and hard to stop.",
 
   "if you focus on 'why' then 'how' become easy.",
+  "dont become a man of success, become a man of value",
 ];

@@ -23,15 +23,17 @@ export default function DatabaseSetup() {
           FOREIGN KEY (routineId)
           REFERENCES routines(id)
           ON DELETE CASCADE
-        );  
-
+        );
 
 
         CREATE TABLE IF NOT EXISTS habits (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,   
           current_streak INTEGER DEFAULT 0,
-          best_streak INTEGER DEFAULT 0
+          best_streak INTEGER DEFAULT 0,
+          duration INTEGER NOT NULL,
+          last_done_date TEXT,
+          last_counted_on TEXT
         );
 
         CREATE TABLE IF NOT EXISTS habit_schedules (
@@ -80,20 +82,20 @@ export default function DatabaseSetup() {
         );        
       `);
 
-      const res = await db.getAllAsync(`
-        SELECT * FROM habit_schedules;
-      `);
+      // const res = await db.getAllAsync(`
+      //   SELECT * FROM habit_schedules;
+      // `);
 
-      const des = await db.getAllAsync(`
-        SELECT * FROM tasks;
-      `);
+      // const des = await db.getAllAsync(`
+      //   SELECT * FROM tasks;
+      // `);
 
       const pes = await db.getAllAsync(`
-        SELECT * FROM task_schedules;
+        SELECT * FROM habits;
       `);
 
-      console.log(res);
-      // console.log(pes);
+      // console.log(res);
+      console.log(pes);
     };
 
     createTables();

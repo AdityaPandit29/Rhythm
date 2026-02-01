@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { groupBusyBlocks } from "../utils/scheduling.js";
 import { useSQLiteContext } from "expo-sqlite";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+
+const START_WINDOW_RATIO = 0.2; // 20% of duration
 
 const loadAllBlocks = async (db) => {
   const recurring = await db.getAllAsync(`
@@ -235,24 +237,292 @@ const formatSeconds = (secs) => {
   return `${h}:${m}:${s}`;
 };
 
+const checkOvernight = (rows) => {
+  return (
+    rows.some((i) => i.end_minutes === 1440) &&
+    rows.some((i) => i.start_minutes === 0)
+  );
+};
+
+const getPrevScheduledStartOffset = (isOvernight, nowMinutes, endMinutes) => {
+  if (isOvernight) {
+    return nowMinutes >= endMinutes ? 1 : 2;
+  } else {
+    return nowMinutes >= endMinutes ? 0 : 1;
+  }
+};
+
+const getHabitDaysAndPrevScheduledDate = async (db, habitId) => {
+  let scheduleDays = [];
+  let prevScheduledDate = null;
+
+  const rows = await db.getAllAsync(
+    `SELECT day, start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
+    habitId,
+  );
+
+  if (!rows || rows.length === 0) {
+    return { scheduleDays: [], prevScheduledDate: null };
+  }
+
+  const isOvernight = checkOvernight(rows);
+
+  for (const row of rows) {
+    if (isOvernight) {
+      if (row.start_minutes !== 0) scheduleDays.push(row.day);
+    } else {
+      scheduleDays.push(row.day);
+    }
+  }
+
+  scheduleDays = scheduleDays.sort((a, b) => a - b);
+
+  let endMinutes;
+
+  if (isOvernight) {
+    const afterMidnight = rows.find((i) => i.start_minutes === 0);
+
+    endMinutes = afterMidnight.end_minutes;
+  } else {
+    endMinutes = rows[0].end_minutes;
+  }
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const offset = getPrevScheduledStartOffset(
+    isOvernight,
+    nowMinutes,
+    endMinutes,
+  );
+
+  for (let i = offset; i < offset + 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+
+    const day = d.getDay();
+
+    if (scheduleDays.includes(day)) {
+      prevScheduledDate = d.toLocaleDateString("sv-SE");
+      break;
+    }
+  }
+
+  return { scheduleDays, prevScheduledDate };
+};
+
+const processHabitStreak = (habit, scheduledDate) => {
+  if (habit.last_counted_on === scheduledDate) return habit;
+
+  const updated = { ...habit };
+
+  if (habit.last_done_date !== scheduledDate) {
+    updated.current_streak = 0;
+  } else {
+    updated.current_streak += 1;
+  }
+
+  updated.best_streak = Math.max(updated.best_streak, updated.current_streak);
+
+  updated.last_counted_on = scheduledDate;
+  return updated;
+};
+
+const processAllHabits = async (db) => {
+  const habits = await db.getAllAsync(`
+    SELECT * FROM habits
+  `);
+
+  for (const habit of habits) {
+    const { scheduledDays, prevScheduledDate } =
+      await getHabitDaysAndPrevScheduledDate(db, habit.id);
+
+    if (!prevScheduledDate) continue;
+
+    const updated = processHabitStreak(habit, prevScheduledDate, scheduledDays);
+
+    if (habit === updated) continue; //////
+
+    await db.runAsync(
+      `
+      UPDATE habits
+      SET current_streak = ?, best_streak = ?, last_counted_on = ?
+      WHERE id = ?
+      `,
+      [
+        updated.current_streak,
+        updated.best_streak,
+        updated.last_counted_on,
+        habit.id,
+      ],
+    );
+  }
+};
+
+const getScheduledDate = async (db, habitId) => {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  const rows = await db.getAllAsync(
+    `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
+    habitId,
+  );
+
+  if (!rows || rows.length === 0) return null;
+
+  const isOvernight = checkOvernight(rows);
+  const scheduledDate = new Date(today);
+
+  if (isOvernight) {
+    const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
+    if (!beforeMidnight) return null;
+
+    const startMinutes = beforeMidnight.start_minutes;
+
+    if (nowMin < startMinutes) {
+      scheduledDate.setDate(scheduledDate.getDate() - 1);
+    }
+  }
+
+  return scheduledDate.toLocaleDateString("sv-SE");
+};
+
+const getLastDoneDate = async (db, habitId) => {
+  const rows = await db.getAllAsync(
+    `
+    SELECT last_done_date
+    FROM habits
+    WHERE id = ?
+    `,
+    habitId,
+  );
+
+  if (!rows || rows.length === 0) return null;
+
+  return rows[0].last_done_date;
+};
+
+const handleHabitStart = async (db, habitId) => {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [{ duration }] = await db.getAllAsync(
+    `SELECT duration FROM habits WHERE id = ?`,
+    habitId,
+  );
+
+  const rows = await db.getAllAsync(
+    `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
+    habitId,
+  );
+
+  if (!rows || rows.length === 0) return;
+
+  const isOvernight = checkOvernight(rows);
+
+  let startMinutes, endMinutes;
+
+  if (isOvernight) {
+    const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
+    const afterMidnight = rows.find((i) => i.start_minutes === 0);
+
+    startMinutes = beforeMidnight.start_minutes;
+    endMinutes = afterMidnight.end_minutes;
+  } else {
+    startMinutes = rows[0].start_minutes;
+    endMinutes = rows[0].end_minutes;
+  }
+
+  let update = false;
+  const scheduledDate = new Date(today);
+  const window = Math.min(
+    Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
+    15,
+  );
+
+  if (!isOvernight) {
+    if (nowMin >= startMinutes && nowMin - startMinutes <= window)
+      update = true;
+  } else {
+    if (startMinutes <= nowMin) {
+      if (nowMin - startMinutes <= window) update = true;
+    } else {
+      scheduledDate.setDate(scheduledDate.getDate() - 1);
+      if (1440 + nowMin - startMinutes <= window) update = true;
+    }
+  }
+
+  if (update) {
+    await db.runAsync(
+      `
+      UPDATE habits
+      SET last_done_date = ?
+      WHERE id = ?
+      `,
+      [scheduledDate.toLocaleDateString("sv-SE"), habitId],
+    );
+
+    return scheduledDate.toLocaleDateString("sv-SE");
+  }
+  return null;
+};
+
 export default function Dashboard() {
   const db = useSQLiteContext();
 
-  // const [blocks, setBlocks] = useState([]);
   const [currentBlock, setCurrentBlock] = useState({ status: "free" });
+  const prevBlockRef = useRef(null);
 
   const load = useCallback(async () => {
+    await processAllHabits(db);
+
     const blocks = await loadAllBlocks(db);
     const grouped = groupBusyBlocks(blocks);
     const curBlock = getCurrentBlock(grouped);
 
+    const sameBlock =
+      prevBlockRef.current &&
+      prevBlockRef.current.id === curBlock.id &&
+      prevBlockRef.current.type === curBlock.type &&
+      prevBlockRef.current.status === curBlock.status;
+
     const { status, type, id, title } = curBlock;
-    if (status === "free")
-      setCurrentBlock({ status, type, id, title, duration: 0 });
-    else {
-      const duration = getDuration(grouped, id, type, status);
-      setCurrentBlock({ status, type, id, title, duration });
+
+    // ⏱️ dynamic value → always recompute
+    const end = status === "free" ? 0 : getDuration(grouped, id, type, status);
+
+    if (sameBlock) {
+      setCurrentBlock((prev) => ({
+        ...prev,
+        end,
+      }));
+      return;
     }
+
+    prevBlockRef.current = curBlock;
+
+    let scheduledDate = null;
+    let lastDoneDate = null;
+
+    if (type === "habit") {
+      scheduledDate = await getScheduledDate(db, id);
+      lastDoneDate = await getLastDoneDate(db, id);
+    }
+
+    setCurrentBlock({
+      status,
+      type,
+      id,
+      title,
+      end,
+      scheduledDate,
+      lastDoneDate,
+    });
   }, [db]);
 
   useFocusEffect(
@@ -296,7 +566,7 @@ export default function Dashboard() {
   const now = new Date();
   const nowSeconds =
     now.getHours() * 60 * 60 + now.getMinutes() * 60 + now.getSeconds();
-  const finalSeconds = currentBlock.duration * 60;
+  const finalSeconds = currentBlock.end * 60;
 
   let mainTime = "00:00:00";
 
@@ -339,12 +609,27 @@ export default function Dashboard() {
               : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
           </Text>
 
-          {/* ACTION BUTTONS */}
-          {/* {currentBlock.status === "ongoing" && (
-            <TouchableOpacity style={styles.doneBtn}>
-              <Text style={styles.btnText}>Mark Done</Text>
-            </TouchableOpacity>
-          )} */}
+          {/* //////////////////////////ACTION BUTTONS/////////////////////////// */}
+          {currentBlock.status === "ongoing" &&
+            currentBlock.type === "habit" &&
+            currentBlock.scheduledDate !== currentBlock.lastDoneDate && (
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={async () => {
+                  const date = await handleHabitStart(db, currentBlock.id);
+                  // console.log(date);
+
+                  if (date) {
+                    setCurrentBlock((prev) => ({
+                      ...prev,
+                      lastDoneDate: date,
+                    }));
+                  }
+                }}
+              >
+                <Text style={styles.btnText}>Start</Text>
+              </TouchableOpacity>
+            )}
         </View>
       </View>
     </SafeAreaView>
