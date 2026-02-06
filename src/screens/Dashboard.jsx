@@ -1,5 +1,5 @@
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useState } from "react";
 import { groupBusyBlocks } from "../utils/scheduling.js";
@@ -7,7 +7,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef } from "react";
 import { quotes } from "../utils/quotes.js";
-
+import { computeAuthority } from "../utils/scheduling.js";
 const START_WINDOW_RATIO = 0.2; // 20% of duration
 
 const loadAllBlocks = async (db) => {
@@ -486,9 +486,44 @@ const handleTaskCompletion = async (db, taskId) => {
   }
 };
 
+const getQuickTasks = async (db) => {
+  const rows = await db.getAllAsync(`
+    SELECT id, title, deadline_date, deadline_minutes, priority
+    FROM tasks
+    WHERE is_auto = 1 AND total_duration = 0;
+  `);
+
+  if (!rows || rows.length === 0) return [];
+
+  const quickTasks = rows.map((row) => {
+    const authority = computeAuthority({
+      priority: row.priority,
+      deadlineDate: row.deadline_date,
+      deadlineMinutes: row.deadline_minutes,
+      duration: 0,
+    });
+
+    return {
+      id: row.id,
+      title: row.title,
+      deadline_date: row.deadline_date,
+      deadline_minutes: row.deadline_minutes,
+      priority: row.priority,
+      authority,
+    };
+  });
+
+  // sort by authority (descending)
+  quickTasks.sort((a, b) => b.authority - a.authority);
+
+  // return top 5
+  return quickTasks.slice(0, 5);
+};
+
 export default function Dashboard() {
   const db = useSQLiteContext();
 
+  const [quickTasks, setQuickTasks] = useState([]);
   const [currentBlock, setCurrentBlock] = useState({ status: "free" });
   const [quote, setQuote] = useState("");
   const prevBlockRef = useRef(null);
@@ -509,7 +544,12 @@ export default function Dashboard() {
     const { status, type, id, title } = curBlock;
 
     // ⏱️ dynamic value → always recompute
-    const end = status === "free" ? 0 : getDuration(grouped, id, type, status);
+    let end;
+    if (status === "free") {
+      const quickTasks = await getQuickTasks(db);
+      setQuickTasks(quickTasks);
+      end = 0;
+    } else end = getDuration(grouped, id, type, status);
 
     if (sameBlock) {
       setCurrentBlock((prev) => ({
@@ -604,64 +644,100 @@ export default function Dashboard() {
 
       <View style={styles.contentWrapper}>
         {/* Quote */}
-        <View style={styles.quoteContainer}>
-          <Text style={styles.quoteText}>"{quote}"</Text>
+        <View style={styles.quoteCard}>
+          <Text style={styles.quoteText}>“{quote[0]}”</Text>
+
+          {quote[1] && <Text style={styles.quoteAuthor}>— {quote[1]}</Text>}
         </View>
 
         {/* ----------------------------------------------------
            CARD 1: NEXT EVENT CARD
         ---------------------------------------------------- */}
-        <View style={styles.mainEventCard}>
-          {/* STATUS */}
-          <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
+        {currentBlock.status === "free" && quickTasks.length !== 0 ? (
+          <View style={styles.quickTaskContainer}>
+            <Text style={styles.quickTitle}>
+              Quick tasks you can finish now
             </Text>
+
+            {quickTasks.map((task) => (
+              <TouchableOpacity
+                key={task.id}
+                style={styles.quickTaskCard}
+                onPress={() => {
+                  Alert.alert(
+                    "Complete Task",
+                    "Are you sure you want to mark this task as done?",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Done",
+                        style: "destructive",
+                        onPress: async () => {
+                          await handleTaskCompletion(db, task.id);
+                          load(); // refresh UI
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Text style={styles.quickTaskText}>{task.title}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
+        ) : (
+          <View style={styles.mainEventCard}>
+            {/* STATUS */}
+            <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>
+                {status.label}
+              </Text>
+            </View>
 
-          <Text style={styles.mainTime}>{mainTime}</Text>
+            <Text style={styles.mainTime}>{mainTime}</Text>
 
-          <Text style={styles.subText}>
-            {currentBlock.status === "free"
-              ? "No ongoing event"
-              : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
-          </Text>
+            <Text style={styles.subText}>
+              {currentBlock.status === "free"
+                ? "No ongoing event"
+                : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
+            </Text>
 
-          {/* //////////////////////////ACTION BUTTONS/////////////////////////// */}
-          {currentBlock.status === "ongoing" &&
-            currentBlock.type === "habit" &&
-            currentBlock.scheduledDate !== currentBlock.lastDoneDate && (
-              <TouchableOpacity
-                style={styles.doneBtn}
-                onPress={async () => {
-                  const date = await handleHabitStart(db, currentBlock.id);
-                  // console.log(date);
+            {/* //////////////////////////ACTION BUTTONS/////////////////////////// */}
+            {currentBlock.status === "ongoing" &&
+              currentBlock.type === "habit" &&
+              currentBlock.scheduledDate !== currentBlock.lastDoneDate && (
+                <TouchableOpacity
+                  style={styles.doneBtn}
+                  onPress={async () => {
+                    const date = await handleHabitStart(db, currentBlock.id);
+                    // console.log(date);
 
-                  if (date) {
-                    setCurrentBlock((prev) => ({
-                      ...prev,
-                      lastDoneDate: date,
-                    }));
-                  }
-                }}
-              >
-                <Text style={styles.btnText}>Start</Text>
-              </TouchableOpacity>
-            )}
+                    if (date) {
+                      setCurrentBlock((prev) => ({
+                        ...prev,
+                        lastDoneDate: date,
+                      }));
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>Start</Text>
+                </TouchableOpacity>
+              )}
 
-          {currentBlock.status === "ongoing" &&
-            currentBlock.type === "task" && (
-              <TouchableOpacity
-                style={styles.doneBtn}
-                onPress={async () => {
-                  await handleTaskCompletion(db, currentBlock.id);
-                  load(); // refresh blocks
-                }}
-              >
-                <Text style={styles.btnText}>Done</Text>
-              </TouchableOpacity>
-            )}
-        </View>
+            {currentBlock.status === "ongoing" &&
+              currentBlock.type === "task" && (
+                <TouchableOpacity
+                  style={styles.doneBtn}
+                  onPress={async () => {
+                    await handleTaskCompletion(db, currentBlock.id);
+                    load(); // refresh blocks
+                  }}
+                >
+                  <Text style={styles.btnText}>Done</Text>
+                </TouchableOpacity>
+              )}
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -822,4 +898,59 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressBarFill: { height: "100%", backgroundColor: "#ff6363ff" },
+
+  quoteCard: {
+    width: "90%",
+    backgroundColor: "#F5F4FF",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  quoteMark: {
+    fontSize: 28,
+    color: "#6C63FF",
+    lineHeight: 28,
+    marginBottom: -6,
+  },
+
+  quoteText: {
+    fontSize: 14,
+    color: "#4A46A3",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  quoteAuthor: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#777",
+    fontStyle: "italic",
+  },
+
+  quickTaskContainer: {
+    marginTop: 16,
+  },
+
+  quickTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 8,
+  },
+
+  quickTaskCard: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "#F2F2F7",
+    marginBottom: 8,
+  },
+
+  quickTaskText: {
+    fontSize: 14,
+    color: "#222",
+  },
 });
