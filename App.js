@@ -9,11 +9,23 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import RoutinesStack from "./src/screens/RoutineStack";
 import HabitsStack from "./src/screens/HabitsStack";
 import TasksStack from "./src/screens/TasksStack";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import DatabaseSetup, { setupDatabase } from "./src/database/DatabaseSetup";
-import { SQLiteProvider } from "expo-sqlite";
+import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+import { rescheduleAllNotifications } from "./src/utils/notify.js";
 
 const Tab = createBottomTabNavigator();
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true, // shows popup/banner
+    shouldShowList: true, // shows in notification tray
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function App() {
   return (
@@ -29,7 +41,7 @@ export default function App() {
               tabBarInactiveTintColor: "#A1A1A1",
               tabBarLabelStyle: { fontSize: 12, fontWeight: "500" },
               tabBarStyle: {
-                backgroundColor: "rgba(255, 255, 255, 0.85)",
+                backgroundColor: "rgba(255, 255, 255, 1)",
                 borderTopColor: "rgba(0,0,0,0.08)",
                 borderTopWidth: 1,
                 elevation: 0,

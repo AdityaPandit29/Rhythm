@@ -28,6 +28,7 @@ import {
   rebalance,
   cleanupExpiredTasks,
 } from "../utils/scheduling.js";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 export default function EditTask() {
   const db = useSQLiteContext();
@@ -521,6 +522,7 @@ export default function EditTask() {
             }
 
             await db.runAsync("COMMIT");
+            await rescheduleNotificationsIfAllowed(db);
           } catch (err) {
             await db.runAsync("ROLLBACK");
 
@@ -692,6 +694,7 @@ export default function EditTask() {
           );
 
           await db.runAsync("COMMIT");
+          await rescheduleNotificationsIfAllowed(db);
         } catch (error) {
           await db.runAsync("ROLLBACK");
           console.log(error.message);

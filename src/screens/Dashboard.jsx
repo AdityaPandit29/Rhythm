@@ -8,9 +8,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef } from "react";
 import { quotes } from "../utils/quotes.js";
 import { computeAuthority } from "../utils/scheduling.js";
-const START_WINDOW_RATIO = 0.2; // 20% of duration
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+import { rescheduleAllNotifications } from "../utils/notify.js";
+const START_WINDOW_RATIO = 0.3; // 20% of duration
+const MAX_LATE = 20;
 
-const loadAllBlocks = async (db) => {
+const loadAllBlocksExceptQuickTasks = async (db) => {
   const recurring = await db.getAllAsync(`
     SELECT 
       rs.start_minutes AS start_minutes,
@@ -443,7 +447,7 @@ const handleHabitStart = async (db, habitId) => {
   const scheduledDate = new Date(today);
   const window = Math.min(
     Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
-    15,
+    MAX_LATE,
   );
 
   if (!isOvernight) {
@@ -520,8 +524,62 @@ const getQuickTasks = async (db) => {
   return quickTasks.slice(0, 5);
 };
 
+function useNotificationBootstrap(db) {
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (!db || ranRef.current) return;
+
+    ranRef.current = true;
+    let cancelled = false;
+
+    const init = async () => {
+      // 1️⃣ Permissions
+      let { status } = await Notifications.getPermissionsAsync();
+
+      if (status !== "granted") {
+        const req = await Notifications.requestPermissionsAsync();
+        status = req.status;
+      }
+
+      if (status !== "granted") {
+        console.warn("Notifications permission not granted");
+        return;
+      }
+
+      // 2️⃣ Android channel
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Default",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+        });
+      }
+
+      // 3️⃣ Schedule notifications
+      if (!cancelled) {
+        console.log("Before notification scheduling");
+        await rescheduleAllNotifications(db);
+        const scheduled =
+          await Notifications.getAllScheduledNotificationsAsync();
+
+        console.log("📅 Scheduled notifications:", scheduled.length);
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  return null;
+}
+
 export default function Dashboard() {
   const db = useSQLiteContext();
+  useNotificationBootstrap(db);
 
   const [quickTasks, setQuickTasks] = useState([]);
   const [currentBlock, setCurrentBlock] = useState({ status: "free" });
@@ -531,7 +589,7 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     await processAllHabits(db);
 
-    const blocks = await loadAllBlocks(db);
+    const blocks = await loadAllBlocksExceptQuickTasks(db);
     const grouped = groupBusyBlocks(blocks);
     const curBlock = getCurrentBlock(grouped);
 
@@ -611,6 +669,7 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
+    // useNotificationBootstrap(db);
     const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
     setQuote(randomQuote);
   }, []);
@@ -637,9 +696,6 @@ export default function Dashboard() {
       {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Dashboard</Text>
-        {/* <TouchableOpacity style={styles.settingsBtn}>
-          <MaterialCommunityIcons name="cog-outline" size={22} color="#444" />
-        </TouchableOpacity> */}
       </View>
 
       <View style={styles.contentWrapper}>
@@ -647,7 +703,11 @@ export default function Dashboard() {
         <View style={styles.quoteCard}>
           <Text style={styles.quoteText}>“{quote[0]}”</Text>
 
-          {quote[1] && <Text style={styles.quoteAuthor}>— {quote[1]}</Text>}
+          {quote[1] && (
+            <View style={styles.authorWrapper}>
+              <Text style={styles.quoteAuthor}>— {quote[1]} </Text>
+            </View>
+          )}
         </View>
 
         {/* ----------------------------------------------------
@@ -728,9 +788,22 @@ export default function Dashboard() {
               currentBlock.type === "task" && (
                 <TouchableOpacity
                   style={styles.doneBtn}
-                  onPress={async () => {
-                    await handleTaskCompletion(db, currentBlock.id);
-                    load(); // refresh blocks
+                  onPress={() => {
+                    Alert.alert(
+                      "Complete Task",
+                      "Are you sure you want to mark this task as done?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Done",
+                          style: "destructive",
+                          onPress: async () => {
+                            await handleTaskCompletion(db, currentBlock.id);
+                            load(); // refresh UI
+                          },
+                        },
+                      ],
+                    );
                   }}
                 >
                   <Text style={styles.btnText}>Done</Text>
@@ -905,8 +978,22 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    alignItems: "center",
     marginBottom: 10,
+    alignSelf: "center",
+  },
+
+  authorWrapper: {
+    width: "100%", // ← key
+    alignItems: "flex-end", // right align without clipping
+    marginTop: 6,
+  },
+
+  quoteAuthor: {
+    fontSize: 12,
+    color: "#777",
+    fontStyle: "italic",
+    includeFontPadding: false,
+    letterSpacing: 0.3,
   },
 
   quoteMark: {
@@ -922,13 +1009,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     textAlign: "center",
     lineHeight: 20,
-  },
-
-  quoteAuthor: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#777",
-    fontStyle: "italic",
   },
 
   quickTaskContainer: {

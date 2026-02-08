@@ -21,6 +21,7 @@ import {
   cleanupExpiredTasks,
   getNextWorkingDate,
 } from "../utils/scheduling.js";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -273,6 +274,7 @@ export default function EditHabit() {
       );
 
       await db.runAsync("COMMIT");
+      await rescheduleNotificationsIfAllowed(db);
 
       console.log("Habit saved successfully.");
       navigation.goBack();

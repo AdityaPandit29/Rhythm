@@ -4,39 +4,10 @@
 4. when an auto task is going on then if we add a manual block whose start time is later than the end time of the ongoing task, then the task is getting resheduled due to rebalancing.
 5. if i obly use react hooks for streaks logic then i will fail if i close my app. i need seesion table to store data
 6. if i update the last_done_date instantly when the habit is started within the start window then i have to keep my app open till the habit end in order to update the streak. -> keep another attribute in the habits table last_counted_on. so now if the app reopens after the schedule then also i can check previous schedule date using last counted_on and if it is same as last_done_date then i will update streak and change last_done_date as last_counted_on.
-
-
-
-
-implemented working threshold to reduce false positives in streaks
-
-
+7. notifications dont work when app is killed. -> we need a server or pre schedule notifications(OS works here).
+8. expo go is suited for notifications. i need to build the app and communicate directly with the OS. then use notifications. 
+9. why am I rescheduling notifications on app start. -> so that it could schedule habits as they are only scheduled for next 7 days.
 
 
 IMPORTANT POINTS - 
 useEffect depends on mounting, while useFocusEffect depends on navigation focus. Screens are lazy-loaded by default, so useEffect doesn’t run until the screen is mounted.
-
-
-
-
- CREATE TABLE IF NOT EXISTS habits (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,   
-          current_streak INTEGER DEFAULT 0,
-          best_streak INTEGER DEFAULT 0,
-          duration INTEGER NOT NULL,
-          last_done_date,
-        );
-
-        CREATE TABLE IF NOT EXISTS habit_schedules (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          habitId INTEGER NOT NULL,
-
-          day INTEGER NOT NULL,     
-          start_minutes INTEGER NOT NULL,
-          end_minutes INTEGER NOT NULL,
-
-          FOREIGN KEY (habitId)
-          REFERENCES habits(id)
-          ON DELETE CASCADE
-        ); 

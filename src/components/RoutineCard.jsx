@@ -3,6 +3,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 export default function RoutineCard({ id, name, intervals, onDeleted }) {
   const navigation = useNavigation();
@@ -32,7 +33,7 @@ export default function RoutineCard({ id, name, intervals, onDeleted }) {
         ...new Set(
           intervals
             .filter((i) => i.start !== 0) // drop carry-over day
-            .map((i) => i.day)
+            .map((i) => i.day),
         ),
       ]
     : [...new Set(intervals.map((i) => i.day))];
@@ -59,7 +60,7 @@ export default function RoutineCard({ id, name, intervals, onDeleted }) {
             try {
               await db.runAsync(
                 `DELETE FROM routine_schedules WHERE routineId = ?`,
-                [id]
+                [id],
               );
               await db.runAsync(`DELETE FROM routines WHERE id = ?`, [id]);
 
@@ -67,13 +68,14 @@ export default function RoutineCard({ id, name, intervals, onDeleted }) {
               if (onDeleted) {
                 onDeleted();
               }
+              await rescheduleNotificationsIfAllowed(db);
             } catch (err) {
               console.error("Delete error:", err);
               Alert.alert("Error", "Failed to delete routine.");
             }
           },
         },
-      ]
+      ],
     );
   };
 

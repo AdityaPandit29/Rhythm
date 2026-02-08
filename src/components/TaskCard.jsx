@@ -3,6 +3,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 export default function TaskCard({
   id,
@@ -105,6 +106,7 @@ export default function TaskCard({
             if (onDeleted) {
               onDeleted();
             }
+            await rescheduleNotificationsIfAllowed(db);
           } catch (err) {
             console.error("Delete error:", err);
             Alert.alert("Error", "Failed to delete task.");

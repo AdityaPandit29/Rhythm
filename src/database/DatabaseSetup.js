@@ -86,15 +86,15 @@ export default function DatabaseSetup() {
         SELECT * FROM habit_schedules;
       `);
 
-      // const des = await db.getAllAsync(`
-      //   SELECT * FROM tasks;
-      // `);
+      const des = await db.getAllAsync(`
+        SELECT * FROM habits;
+      `);
 
       // const pes = await db.getAllAsync(`
       //   SELECT * FROM task_schedules;
       // `);
 
-      // console.log(res);
+      // console.log(des);
       // console.log(pes);
     };
 

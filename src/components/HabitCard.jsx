@@ -3,6 +3,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 export default function HabitCard({
   id,
@@ -39,7 +40,7 @@ export default function HabitCard({
         ...new Set(
           intervals
             .filter((i) => i.start !== 0) // drop carry-over day
-            .map((i) => i.day)
+            .map((i) => i.day),
         ),
       ]
     : [...new Set(intervals.map((i) => i.day))];
@@ -70,6 +71,7 @@ export default function HabitCard({
             if (onDeleted) {
               onDeleted();
             }
+            await rescheduleNotificationsIfAllowed(db);
           } catch (err) {
             console.error("Delete error:", err);
             Alert.alert("Error", "Failed to delete habit.");

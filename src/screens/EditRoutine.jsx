@@ -21,6 +21,7 @@ import {
   cleanupExpiredTasks,
   getNextWorkingDate,
 } from "../utils/scheduling.js";
+import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
 const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"]; // displayed labels
 
@@ -278,6 +279,7 @@ export default function EditRoutine() {
       );
 
       await db.runAsync("COMMIT");
+      await rescheduleNotificationsIfAllowed(db);
       console.log("Routine saved successfully.");
       navigation.goBack();
     } catch (err) {
