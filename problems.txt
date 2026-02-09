@@ -7,7 +7,7 @@
 7. notifications dont work when app is killed. -> we need a server or pre schedule notifications(OS works here).
 8. expo go is suited for notifications. i need to build the app and communicate directly with the OS. then use notifications. 
 9. why am I rescheduling notifications on app start. -> so that it could schedule habits as they are only scheduled for next 7 days.
-
+10. code redundancy
 
 IMPORTANT POINTS - 
 useEffect depends on mounting, while useFocusEffect depends on navigation focus. Screens are lazy-loaded by default, so useEffect doesn’t run until the screen is mounted.

@@ -11,6 +11,7 @@ import { computeAuthority } from "../utils/scheduling.js";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { rescheduleAllNotifications } from "../utils/notify.js";
+import { BottomTabBarHeightCallbackContext } from "@react-navigation/bottom-tabs";
 const START_WINDOW_RATIO = 0.3; // 20% of duration
 const MAX_LATE = 20;
 
@@ -364,7 +365,7 @@ const processAllHabits = async (db) => {
   }
 };
 
-const getScheduledDate = async (db, habitId) => {
+const getHabitInfo = async (db, habitId) => {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
@@ -380,19 +381,26 @@ const getScheduledDate = async (db, habitId) => {
 
   const isOvernight = checkOvernight(rows);
   const scheduledDate = new Date(today);
+  let startMinutes;
 
   if (isOvernight) {
     const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
     if (!beforeMidnight) return null;
 
-    const startMinutes = beforeMidnight.start_minutes;
+    startMinutes = beforeMidnight.start_minutes;
 
     if (nowMin < startMinutes) {
       scheduledDate.setDate(scheduledDate.getDate() - 1);
     }
+  } else {
+    startMinutes = rows[0].start_minutes;
   }
 
-  return scheduledDate.toLocaleDateString("sv-SE");
+  return {
+    habitScheduledDate: scheduledDate.toLocaleDateString("sv-SE"),
+    habitStartMinutes: startMinutes,
+    isHabitOvernight: isOvernight,
+  };
 };
 
 const getLastDoneDate = async (db, habitId) => {
@@ -410,7 +418,12 @@ const getLastDoneDate = async (db, habitId) => {
   return rows[0].last_done_date;
 };
 
-const handleHabitStart = async (db, habitId) => {
+const isHabitStartWindowexpired = async (
+  db,
+  habitId,
+  startMinutes,
+  isOvernight,
+) => {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   let today = new Date();
@@ -421,30 +434,27 @@ const handleHabitStart = async (db, habitId) => {
     habitId,
   );
 
-  const rows = await db.getAllAsync(
-    `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
-    habitId,
-  );
+  // const rows = await db.getAllAsync(
+  //   `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
+  //   habitId,
+  // );
 
-  if (!rows || rows.length === 0) return;
+  // if (!rows || rows.length === 0) return;
 
-  const isOvernight = checkOvernight(rows);
+  // const isOvernight = checkOvernight(rows);
 
-  let startMinutes, endMinutes;
+  // let startMinutes;
 
-  if (isOvernight) {
-    const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
-    const afterMidnight = rows.find((i) => i.start_minutes === 0);
+  // if (isOvernight) {
+  //   const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
 
-    startMinutes = beforeMidnight.start_minutes;
-    endMinutes = afterMidnight.end_minutes;
-  } else {
-    startMinutes = rows[0].start_minutes;
-    endMinutes = rows[0].end_minutes;
-  }
+  //   startMinutes = beforeMidnight.start_minutes;
+  // } else {
+  //   startMinutes = rows[0].start_minutes;
+  // }
 
-  let update = false;
-  const scheduledDate = new Date(today);
+  let isLate = true;
+  // const scheduledDate = new Date(today);
   const window = Math.min(
     Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
     MAX_LATE,
@@ -452,29 +462,85 @@ const handleHabitStart = async (db, habitId) => {
 
   if (!isOvernight) {
     if (nowMin >= startMinutes && nowMin - startMinutes <= window)
-      update = true;
+      isLate = false;
   } else {
     if (startMinutes <= nowMin) {
-      if (nowMin - startMinutes <= window) update = true;
+      if (nowMin - startMinutes <= window) isLate = false;
     } else {
-      scheduledDate.setDate(scheduledDate.getDate() - 1);
-      if (1440 + nowMin - startMinutes <= window) update = true;
+      // scheduledDate.setDate(scheduledDate.getDate() - 1);
+      if (1440 + nowMin - startMinutes <= window) isLate = false;
     }
   }
 
-  if (update) {
+  return isLate;
+};
+
+const handleHabitStart = async (db, habitId, scheduledDate) => {
+  // const now = new Date();
+  // const nowMin = now.getHours() * 60 + now.getMinutes();
+  // let today = new Date();
+  // today.setHours(0, 0, 0, 0);
+
+  // const [{ duration }] = await db.getAllAsync(
+  //   `SELECT duration FROM habits WHERE id = ?`,
+  //   habitId,
+  // );
+
+  // const rows = await db.getAllAsync(
+  //   `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
+  //   habitId,
+  // );
+
+  // if (!rows || rows.length === 0) return;
+
+  // const isOvernight = checkOvernight(rows);
+
+  // let startMinutes;
+
+  // if (isOvernight) {
+  //   const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
+
+  //   startMinutes = beforeMidnight.start_minutes;
+  // } else {
+  //   startMinutes = rows[0].start_minutes;
+  // }
+
+  // let update = false;
+  // const scheduledDate = new Date(today);
+  // const window = Math.min(
+  //   Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
+  //   MAX_LATE,
+  // );
+
+  // if (!isOvernight) {
+  //   if (nowMin >= startMinutes && nowMin - startMinutes <= window)
+  //     update = true;
+  // } else {
+  //   if (startMinutes <= nowMin) {
+  //     if (nowMin - startMinutes <= window) update = true;
+  //   } else {
+  //     scheduledDate.setDate(scheduledDate.getDate() - 1);
+  //     if (1440 + nowMin - startMinutes <= window) update = true;
+  //   }
+  // }
+
+  // const isLate = await isHabitStartWindowexpired(db, habitId);
+  // if (!isLate) {
+  try {
     await db.runAsync(
       `
       UPDATE habits
       SET last_done_date = ?
       WHERE id = ?
       `,
-      [scheduledDate.toLocaleDateString("sv-SE"), habitId],
+      [scheduledDate, habitId],
     );
-
-    return scheduledDate.toLocaleDateString("sv-SE");
+  } catch (error) {
+    console.error(error);
   }
-  return null;
+  return scheduledDate;
+  // }
+  // return null;
 };
 
 const handleTaskCompletion = async (db, taskId) => {
@@ -619,12 +685,21 @@ export default function Dashboard() {
 
     prevBlockRef.current = curBlock;
 
-    let scheduledDate = null;
+    let scheduledDate = null,
+      isLate = null;
     let lastDoneDate = null;
 
     if (type === "habit") {
-      scheduledDate = await getScheduledDate(db, id);
+      const { habitScheduledDate, habitStartMinutes, isHabitOvernight } =
+        await getHabitInfo(db, id);
+      scheduledDate = habitScheduledDate;
       lastDoneDate = await getLastDoneDate(db, id);
+      isLate = await isHabitStartWindowexpired(
+        db,
+        id,
+        habitStartMinutes,
+        isHabitOvernight,
+      );
     }
 
     setCurrentBlock({
@@ -635,6 +710,7 @@ export default function Dashboard() {
       end,
       scheduledDate,
       lastDoneDate,
+      isLate,
     });
   }, [db]);
 
@@ -676,7 +752,7 @@ export default function Dashboard() {
 
   const statusMap = {
     ongoing: { bg: "#5CCF5C20", color: "#2E9B2E", label: "Ongoing" },
-    upcoming: { bg: "#5CCF5C20", color: "#9b512eff", label: "Starting in" },
+    upcoming: { bg: "#FFF4D6", color: "#7A4D00", label: "Starting in" },
     free: { bg: "#DDD", color: "#555", label: "Free Time" },
   };
 
@@ -753,24 +829,27 @@ export default function Dashboard() {
                 {status.label}
               </Text>
             </View>
-
             <Text style={styles.mainTime}>{mainTime}</Text>
-
             <Text style={styles.subText}>
               {currentBlock.status === "free"
                 ? "No ongoing event"
                 : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
             </Text>
+            {/* {console.log(currentBlock.isLate + " " + currentBlock.isLate)} */}
 
             {/* //////////////////////////ACTION BUTTONS/////////////////////////// */}
             {currentBlock.status === "ongoing" &&
               currentBlock.type === "habit" &&
-              currentBlock.scheduledDate !== currentBlock.lastDoneDate && (
+              currentBlock.scheduledDate !== currentBlock.lastDoneDate &&
+              (currentBlock.isLate === false ? (
                 <TouchableOpacity
-                  style={styles.doneBtn}
+                  style={styles.startButton}
                   onPress={async () => {
-                    const date = await handleHabitStart(db, currentBlock.id);
-                    // console.log(date);
+                    const date = await handleHabitStart(
+                      db,
+                      currentBlock.id,
+                      currentBlock.scheduledDate,
+                    );
 
                     if (date) {
                       setCurrentBlock((prev) => ({
@@ -780,14 +859,21 @@ export default function Dashboard() {
                     }
                   }}
                 >
-                  <Text style={styles.btnText}>Start</Text>
+                  {/* <View style={styles.startButton}> */}
+                  <Text style={styles.startButtonText}>Start</Text>
+                  {/* </View> */}
                 </TouchableOpacity>
-              )}
+              ) : (
+                <Text style={styles.lateText}>
+                  You're late! {"\n"}
+                  Being on time helps protect your streak.
+                </Text>
+              ))}
 
             {currentBlock.status === "ongoing" &&
               currentBlock.type === "task" && (
                 <TouchableOpacity
-                  style={styles.doneBtn}
+                  style={styles.startButton}
                   onPress={() => {
                     Alert.alert(
                       "Complete Task",
@@ -806,7 +892,7 @@ export default function Dashboard() {
                     );
                   }}
                 >
-                  <Text style={styles.btnText}>Done</Text>
+                  <Text style={styles.startButtonText}>Done</Text>
                 </TouchableOpacity>
               )}
           </View>
@@ -1032,5 +1118,46 @@ const styles = StyleSheet.create({
   quickTaskText: {
     fontSize: 14,
     color: "#222",
+  },
+
+  lateText: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+
+    color: "#7A4D00", // dark amber text
+    backgroundColor: "#FFF4D6", // light amber bg
+    borderWidth: 1,
+    borderColor: "#FFD48A",
+
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+
+  startButton: {
+    marginTop: 24,
+    paddingHorizontal: 24,
+
+    backgroundColor: "#10B981", // emerald green (success/action)
+    borderRadius: 12,
+
+    minHeight: 40, // 48px+ touch target
+    justifyContent: "center",
+    alignItems: "center",
+
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3, // Android shadow
+  },
+  startButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
