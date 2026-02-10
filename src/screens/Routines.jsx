@@ -57,7 +57,7 @@ export default function Routines() {
 
       setRoutines(finalList);
     } catch (err) {
-      console.log("Load routines error:", err);
+      console.error("Load routines error:", err);
     }
   };
 

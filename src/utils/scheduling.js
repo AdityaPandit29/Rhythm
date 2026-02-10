@@ -557,8 +557,6 @@ export const rebalance = async (db, type, startDate, startMinutes) => {
       }),
     }));
 
-    console.log(mappedAutoTasks);
-
     const calendar = buildCalendar({
       busyItems: busyItems,
       scheduleStart: today,

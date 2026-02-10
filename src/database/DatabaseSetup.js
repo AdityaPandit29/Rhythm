@@ -81,21 +81,6 @@ export default function DatabaseSetup() {
           ON DELETE CASCADE
         );        
       `);
-
-      // const res = await db.getAllAsync(`
-      //   SELECT * FROM habit_schedules;
-      // `);
-
-      // const des = await db.getAllAsync(`
-      //   SELECT * FROM habits;
-      // `);
-
-      // const pes = await db.getAllAsync(`
-      //   SELECT * FROM task_schedules;
-      // `);
-
-      // console.log(des);
-      // console.log(pes);
     };
 
     createTables();

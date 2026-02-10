@@ -275,8 +275,6 @@ export default function EditHabit() {
 
       await db.runAsync("COMMIT");
       await rescheduleNotificationsIfAllowed(db);
-
-      console.log("Habit saved successfully.");
       navigation.goBack();
     } catch (err) {
       await db.runAsync("ROLLBACK");

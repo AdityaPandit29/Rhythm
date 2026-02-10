@@ -310,14 +310,11 @@ export async function rescheduleNotificationsIfAllowed(db) {
     const allowed = await hasNotificationPermission();
 
     if (!allowed) {
-      console.log("🔕 Notifications disabled — skipping reschedule");
       return;
     }
 
     await rescheduleAllNotifications(db);
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-
-    console.log("📅 Scheduled notifications:", scheduled.length);
   } catch (err) {
     console.error("❌ Notification reschedule failed:", err);
   }

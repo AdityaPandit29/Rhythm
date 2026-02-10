@@ -60,7 +60,7 @@ export default function Habits() {
 
       setHabits(finalList);
     } catch (err) {
-      console.log("Load habits error:", err);
+      console.error("Load habits error:", err);
     }
   };
 

@@ -280,7 +280,6 @@ export default function EditRoutine() {
 
       await db.runAsync("COMMIT");
       await rescheduleNotificationsIfAllowed(db);
-      console.log("Routine saved successfully.");
       navigation.goBack();
     } catch (err) {
       await db.runAsync("ROLLBACK");

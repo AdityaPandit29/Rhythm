@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   Alert,
+  Dimensions,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -30,6 +31,12 @@ import {
 } from "../utils/scheduling.js";
 import { rescheduleNotificationsIfAllowed } from "../utils/notify.js";
 
+const { width, height } = Dimensions.get("window");
+const wp = (p) => (width * p) / 100;
+const hp = (p) => (height * p) / 100;
+
+const isSmallDevice = height < 700;
+
 export default function EditTask() {
   const db = useSQLiteContext();
 
@@ -47,12 +54,12 @@ export default function EditTask() {
 
   const DURATION_OPTIONS = [
     { label: "Quick", minutes: 0 },
-    { label: "30 min", minutes: 30 },
-    { label: "1 hr", minutes: 60 },
-    { label: "1 hr 30 min", minutes: 90 },
-    { label: "2 hr", minutes: 120 },
-    { label: "2 hr 30 min", minutes: 150 },
-    { label: "3 hr", minutes: 180 },
+    { label: "30m", minutes: 30 },
+    { label: "1h", minutes: 60 },
+    { label: "1h 30m", minutes: 90 },
+    { label: "2h", minutes: 120 },
+    { label: "2h 30m", minutes: 150 },
+    { label: "3h", minutes: 180 },
   ];
 
   function minutesToTimeAMPM(minutes) {
@@ -697,7 +704,7 @@ export default function EditTask() {
           await rescheduleNotificationsIfAllowed(db);
         } catch (error) {
           await db.runAsync("ROLLBACK");
-          console.log(error.message);
+          console.error(error.message);
 
           throw new Error(
             error?.message || "Rebalance after scheduling task failed",
@@ -931,6 +938,10 @@ export default function EditTask() {
                         durationMinutes === opt.minutes &&
                           styles.durationTextActive,
                       ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                      allowFontScaling={false}
                     >
                       {opt.label}
                     </Text>
@@ -1023,21 +1034,6 @@ export default function EditTask() {
             <Text style={styles.saveBtnText}>Save Task</Text>
           </TouchableOpacity>
         </View>
-
-        {/* MODALS */}
-        {/* {renderPickerModal(
-          showHourModal,
-          setShowHourModal,
-          [...Array(3).keys()], // 0–12 hours
-          setSelectedHours
-        )}
-
-        {renderPickerModal(
-          showMinuteModal,
-          setShowMinuteModal,
-          [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
-          setSelectedMinutes
-        )} */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1238,18 +1234,12 @@ const styles = StyleSheet.create({
   },
 
   durationText: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 10 : 12,
     fontWeight: "600",
     color: "#333",
   },
 
   durationTextActive: {
     color: "#FFF",
-  },
-
-  durationHint: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#777",
   },
 });

@@ -8,8 +8,7 @@ import { useCallback, useRef } from "react";
 import { quotes } from "../utils/quotes.js";
 import { computeAuthority } from "../utils/scheduling.js";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
-import { Dimensions } from "react-native";
+import { Platform, Dimensions } from "react-native";
 import { rescheduleAllNotifications } from "../utils/notify.js";
 const START_WINDOW_RATIO = 0.3; // 30% of duration
 const MAX_LATE = 20;
@@ -556,12 +555,7 @@ function useNotificationBootstrap(db) {
 
       // 3️⃣ Schedule notifications
       if (!cancelled) {
-        console.log("Before notification scheduling");
         await rescheduleAllNotifications(db);
-        const scheduled =
-          await Notifications.getAllScheduledNotificationsAsync();
-
-        console.log("📅 Scheduled notifications:", scheduled.length);
       }
     };
 
