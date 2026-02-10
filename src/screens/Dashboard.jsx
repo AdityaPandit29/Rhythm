@@ -1,6 +1,5 @@
 import { SafeAreaView } from "react-native-safe-area-context";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useState } from "react";
 import { groupBusyBlocks } from "../utils/scheduling.js";
 import { useSQLiteContext } from "expo-sqlite";
@@ -10,10 +9,16 @@ import { quotes } from "../utils/quotes.js";
 import { computeAuthority } from "../utils/scheduling.js";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { Dimensions } from "react-native";
 import { rescheduleAllNotifications } from "../utils/notify.js";
-import { BottomTabBarHeightCallbackContext } from "@react-navigation/bottom-tabs";
-const START_WINDOW_RATIO = 0.3; // 20% of duration
+const START_WINDOW_RATIO = 0.3; // 30% of duration
 const MAX_LATE = 20;
+
+const { width, height } = Dimensions.get("window");
+const wp = (p) => (width * p) / 100;
+const hp = (p) => (height * p) / 100;
+
+const isSmallDevice = height < 700;
 
 const loadAllBlocksExceptQuickTasks = async (db) => {
   const recurring = await db.getAllAsync(`
@@ -434,27 +439,7 @@ const isHabitStartWindowexpired = async (
     habitId,
   );
 
-  // const rows = await db.getAllAsync(
-  //   `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
-  //   habitId,
-  // );
-
-  // if (!rows || rows.length === 0) return;
-
-  // const isOvernight = checkOvernight(rows);
-
-  // let startMinutes;
-
-  // if (isOvernight) {
-  //   const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
-
-  //   startMinutes = beforeMidnight.start_minutes;
-  // } else {
-  //   startMinutes = rows[0].start_minutes;
-  // }
-
   let isLate = true;
-  // const scheduledDate = new Date(today);
   const window = Math.min(
     Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
     MAX_LATE,
@@ -467,7 +452,6 @@ const isHabitStartWindowexpired = async (
     if (startMinutes <= nowMin) {
       if (nowMin - startMinutes <= window) isLate = false;
     } else {
-      // scheduledDate.setDate(scheduledDate.getDate() - 1);
       if (1440 + nowMin - startMinutes <= window) isLate = false;
     }
   }
@@ -476,56 +460,6 @@ const isHabitStartWindowexpired = async (
 };
 
 const handleHabitStart = async (db, habitId, scheduledDate) => {
-  // const now = new Date();
-  // const nowMin = now.getHours() * 60 + now.getMinutes();
-  // let today = new Date();
-  // today.setHours(0, 0, 0, 0);
-
-  // const [{ duration }] = await db.getAllAsync(
-  //   `SELECT duration FROM habits WHERE id = ?`,
-  //   habitId,
-  // );
-
-  // const rows = await db.getAllAsync(
-  //   `SELECT start_minutes, end_minutes FROM habit_schedules WHERE habitId = ?`,
-  //   habitId,
-  // );
-
-  // if (!rows || rows.length === 0) return;
-
-  // const isOvernight = checkOvernight(rows);
-
-  // let startMinutes;
-
-  // if (isOvernight) {
-  //   const beforeMidnight = rows.find((i) => i.end_minutes === 1440);
-
-  //   startMinutes = beforeMidnight.start_minutes;
-  // } else {
-  //   startMinutes = rows[0].start_minutes;
-  // }
-
-  // let update = false;
-  // const scheduledDate = new Date(today);
-  // const window = Math.min(
-  //   Math.max(1, Math.floor(duration * START_WINDOW_RATIO)),
-  //   MAX_LATE,
-  // );
-
-  // if (!isOvernight) {
-  //   if (nowMin >= startMinutes && nowMin - startMinutes <= window)
-  //     update = true;
-  // } else {
-  //   if (startMinutes <= nowMin) {
-  //     if (nowMin - startMinutes <= window) update = true;
-  //   } else {
-  //     scheduledDate.setDate(scheduledDate.getDate() - 1);
-  //     if (1440 + nowMin - startMinutes <= window) update = true;
-  //   }
-  // }
-
-  // const isLate = await isHabitStartWindowexpired(db, habitId);
-  // if (!isLate) {
   try {
     await db.runAsync(
       `
@@ -539,8 +473,6 @@ const handleHabitStart = async (db, habitId, scheduledDate) => {
     console.error(error);
   }
   return scheduledDate;
-  // }
-  // return null;
 };
 
 const handleTaskCompletion = async (db, taskId) => {
@@ -789,102 +721,42 @@ export default function Dashboard() {
         {/* ----------------------------------------------------
            CARD 1: NEXT EVENT CARD
         ---------------------------------------------------- */}
-        {currentBlock.status === "free" && quickTasks.length !== 0 ? (
-          <View style={styles.quickTaskContainer}>
-            <Text style={styles.quickTitle}>
-              Quick tasks you can finish now
-            </Text>
 
-            {quickTasks.map((task) => (
-              <TouchableOpacity
-                key={task.id}
-                style={styles.quickTaskCard}
-                onPress={() => {
-                  Alert.alert(
-                    "Complete Task",
-                    "Are you sure you want to mark this task as done?",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Done",
-                        style: "destructive",
-                        onPress: async () => {
-                          await handleTaskCompletion(db, task.id);
-                          load(); // refresh UI
-                        },
-                      },
-                    ],
-                  );
-                }}
-              >
-                <Text style={styles.quickTaskText}>{task.title}</Text>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.mainEventCard}>
+          {/* STATUS */}
+          <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>
+              {status.label}
+            </Text>
           </View>
-        ) : (
-          <View style={styles.mainEventCard}>
-            {/* STATUS */}
-            <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-              <Text style={[styles.statusText, { color: status.color }]}>
-                {status.label}
+
+          {currentBlock.status === "free" && quickTasks.length !== 0 ? (
+            <View style={styles.quickTaskContainer}>
+              <Text
+                style={styles.quickTitle}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                allowFontScaling={false}
+              >
+                Quick tasks you can finish now
               </Text>
-            </View>
-            <Text style={styles.mainTime}>{mainTime}</Text>
-            <Text style={styles.subText}>
-              {currentBlock.status === "free"
-                ? "No ongoing event"
-                : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
-            </Text>
-            {/* {console.log(currentBlock.isLate + " " + currentBlock.isLate)} */}
 
-            {/* //////////////////////////ACTION BUTTONS/////////////////////////// */}
-            {currentBlock.status === "ongoing" &&
-              currentBlock.type === "habit" &&
-              currentBlock.scheduledDate !== currentBlock.lastDoneDate &&
-              (currentBlock.isLate === false ? (
+              {quickTasks.map((task) => (
                 <TouchableOpacity
-                  style={styles.startButton}
-                  onPress={async () => {
-                    const date = await handleHabitStart(
-                      db,
-                      currentBlock.id,
-                      currentBlock.scheduledDate,
-                    );
-
-                    if (date) {
-                      setCurrentBlock((prev) => ({
-                        ...prev,
-                        lastDoneDate: date,
-                      }));
-                    }
-                  }}
-                >
-                  {/* <View style={styles.startButton}> */}
-                  <Text style={styles.startButtonText}>Start</Text>
-                  {/* </View> */}
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.lateText}>
-                  You're late! {"\n"}
-                  Being on time helps protect your streak.
-                </Text>
-              ))}
-
-            {currentBlock.status === "ongoing" &&
-              currentBlock.type === "task" && (
-                <TouchableOpacity
-                  style={styles.startButton}
+                  key={task.id}
+                  style={styles.quickTaskCard}
                   onPress={() => {
                     Alert.alert(
                       "Complete Task",
-                      "Are you sure you want to mark this task as done?",
+                      `Are you sure you want to mark '${task.title}' as done?`,
                       [
                         { text: "Cancel", style: "cancel" },
                         {
                           text: "Done",
                           style: "destructive",
                           onPress: async () => {
-                            await handleTaskCompletion(db, currentBlock.id);
+                            await handleTaskCompletion(db, task.id);
                             load(); // refresh UI
                           },
                         },
@@ -892,11 +764,94 @@ export default function Dashboard() {
                     );
                   }}
                 >
-                  <Text style={styles.startButtonText}>Done</Text>
+                  <Text style={styles.quickTaskText} numberOfLines={1}>
+                    {task.title}
+                  </Text>
                 </TouchableOpacity>
-              )}
-          </View>
-        )}
+              ))}
+            </View>
+          ) : (
+            <>
+              <Text
+                style={styles.subText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                allowFontScaling={false}
+              >
+                {currentBlock.status === "free"
+                  ? "No ongoing event"
+                  : `${currentBlock.type.toUpperCase()}: ${currentBlock.title}`}
+              </Text>
+              <Text
+                style={styles.mainTime}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                allowFontScaling={false}
+              >
+                {mainTime}
+              </Text>
+
+              {/* ACTION BUTTONS */}
+              {currentBlock.status === "ongoing" &&
+                currentBlock.type === "habit" &&
+                currentBlock.scheduledDate !== currentBlock.lastDoneDate &&
+                (currentBlock.isLate === false ? (
+                  <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={async () => {
+                      const date = await handleHabitStart(
+                        db,
+                        currentBlock.id,
+                        currentBlock.scheduledDate,
+                      );
+
+                      if (date) {
+                        setCurrentBlock((prev) => ({
+                          ...prev,
+                          lastDoneDate: date,
+                        }));
+                      }
+                    }}
+                  >
+                    <Text style={styles.startButtonText}>Start</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.lateText}>
+                    You're late! {"\n"}
+                    Being on time helps protect your streak.
+                  </Text>
+                ))}
+
+              {currentBlock.status === "ongoing" &&
+                currentBlock.type === "task" && (
+                  <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={() => {
+                      Alert.alert(
+                        "Complete Task",
+                        "Are you sure you want to mark this task as done?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Done",
+                            style: "destructive",
+                            onPress: async () => {
+                              await handleTaskCompletion(db, currentBlock.id);
+                              load(); // refresh UI
+                            },
+                          },
+                        ],
+                      );
+                    }}
+                  >
+                    <Text style={styles.startButtonText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+            </>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -919,153 +874,45 @@ const styles = StyleSheet.create({
 
   /* HEADER */
   header: {
-    height: 60,
+    height: hp(8),
+    minHeight: 56,
     width: "100%",
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: isSmallDevice ? 18 : 20,
     fontWeight: "600",
     color: "#333",
   },
   settingsBtn: {
     position: "absolute",
-    right: 16,
+    right: wp(4),
   },
 
   /* QUOTE */
   quoteContainer: {
     alignItems: "center",
   },
-  quoteText: {
-    fontSize: 14,
-    color: "#6C63FF",
-    fontWeight: "500",
-  },
-
-  /* NEXT EVENT CARD */
-  mainEventCard: {
-    width: 320,
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 24,
-    alignItems: "center",
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#888",
-  },
-  mainTime: {
-    fontSize: 40,
-    fontWeight: "700",
-    marginVertical: 8,
-    color: "#333",
-  },
-  subText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#555",
-  },
-  statusPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusText: {
-    fontWeight: "600",
-    fontSize: 12,
-  },
-
-  /* ACTION BUTTONS */
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
-  },
-  doneBtn: {
-    backgroundColor: "#6C63FF",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  leaveBtn: {
-    backgroundColor: "#FF5555",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  rescheduleBtn: {
-    backgroundColor: "#888",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  btnText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  /* FREE TIME CARD */
-  freeTimeCard: {
-    width: 320,
-    backgroundColor: "#F4F2FF",
-    padding: 20,
-    borderRadius: 20,
-    alignItems: "center",
-  },
-  freeTimeTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#6C63FF",
-  },
-  freeTimeSubtitle: {
-    fontSize: 13,
-    color: "#555",
-    marginTop: 6,
-  },
-  freeTaskName: {
-    marginTop: 10,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  startNowBtn: {
-    marginTop: 14,
-    backgroundColor: "#6C63FF",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  startNowText: {
-    color: "white",
-    fontWeight: "600",
-  },
-
-  /* PROGRESS */
-  progressContainer: { width: "100%", alignItems: "center" },
-  progressText: { fontSize: 12, color: "#444", marginBottom: 6 },
-  progressBarBackground: {
-    width: "80%",
-    height: 10,
-    backgroundColor: "#EDEBFF",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  progressBarFill: { height: "100%", backgroundColor: "#ff6363ff" },
 
   quoteCard: {
-    width: "90%",
+    width: wp(90),
+    maxWidth: 380,
     backgroundColor: "#F5F4FF",
     borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginBottom: 10,
+    paddingVertical: hp(2),
+    paddingHorizontal: wp(5),
+    marginBottom: hp(2),
     alignSelf: "center",
+  },
+
+  quoteText: {
+    fontSize: isSmallDevice ? 13 : 14,
+    color: "#4A46A3",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: isSmallDevice ? 18 : 20,
   },
 
   authorWrapper: {
@@ -1082,37 +929,90 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  quoteMark: {
-    fontSize: 28,
-    color: "#6C63FF",
-    lineHeight: 28,
-    marginBottom: -6,
+  /* MAIN EVENT CARD */
+  mainEventCard: {
+    width: wp(90), // responsive
+    maxWidth: 360, // prevents looking too wide on tablets
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: wp(6),
+    alignItems: "center",
+    elevation: 3,
+  },
+  mainTime: {
+    fontSize: isSmallDevice ? 32 : 40,
+    fontWeight: "700",
+    marginVertical: hp(1),
+    color: "#333",
+  },
+  subText: {
+    fontSize: isSmallDevice ? 18 : 20,
+    fontWeight: "500",
+    color: "#555",
+    textAlign: "center",
+    marginBottom: hp(1.5),
   },
 
-  quoteText: {
-    fontSize: 14,
-    color: "#4A46A3",
-    fontWeight: "500",
-    textAlign: "center",
-    lineHeight: 20,
+  statusPill: {
+    paddingHorizontal: wp(5), // 20px → bigger pill
+    paddingVertical: hp(1), // taller pill
+    borderRadius: wp(3.5), // consistent responsive radius
+    marginBottom: hp(1.5),
+    alignSelf: "center",
   },
+
+  statusText: {
+    fontWeight: "700", // bolder for status
+    fontSize: 12, // 14px → bigger & prominent
+    letterSpacing: 0.3,
+  },
+
+  /* ACTION BUTTONS */
+
+  startButton: {
+    marginTop: hp(3),
+    minHeight: 48,
+    minWidth: wp(40),
+    paddingHorizontal: wp(6),
+    backgroundColor: "#10B981",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  startButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+
+  /* QUICK TASKS */
 
   quickTaskContainer: {
-    marginTop: 16,
+    width: "100%",
+    marginTop: hp(1),
   },
 
   quickTitle: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 18 : 20,
     fontWeight: "600",
     color: "#666",
-    marginBottom: 8,
+    marginBottom: hp(1.5),
+    textAlign: "center",
   },
 
   quickTaskCard: {
-    padding: 12,
-    borderRadius: 10,
+    paddingVertical: hp(1.5),
+    paddingHorizontal: wp(4),
+    borderRadius: 12,
     backgroundColor: "#F2F2F7",
-    marginBottom: 8,
+    marginBottom: hp(1),
   },
 
   quickTaskText: {
@@ -1121,43 +1021,16 @@ const styles = StyleSheet.create({
   },
 
   lateText: {
-    marginTop: 10,
+    marginTop: hp(1.5),
     fontSize: 13,
     lineHeight: 18,
     textAlign: "center",
-
-    color: "#7A4D00", // dark amber text
-    backgroundColor: "#FFF4D6", // light amber bg
+    color: "#7A4D00",
+    backgroundColor: "#FFF4D6",
     borderWidth: 1,
     borderColor: "#FFD48A",
-
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: hp(1),
+    paddingHorizontal: wp(4),
     borderRadius: 12,
-    overflow: "hidden",
-  },
-
-  startButton: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-
-    backgroundColor: "#10B981", // emerald green (success/action)
-    borderRadius: 12,
-
-    minHeight: 40, // 48px+ touch target
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3, // Android shadow
-  },
-  startButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-    letterSpacing: 0.5,
   },
 });
