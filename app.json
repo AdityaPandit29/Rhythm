@@ -29,6 +29,12 @@
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "42bcb5ed-d852-4edc-8005-dd8377faf8ea"
+      }
+    },
+    "owner": "pandit12.aditya"
   }
 }

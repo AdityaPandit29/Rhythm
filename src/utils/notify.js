@@ -6,18 +6,6 @@ const loadAllBlocks = async (db) => {
   try {
     const recurring = await db.getAllAsync(`
       SELECT 
-        rs.start_minutes AS start_minutes,
-        rs.end_minutes AS end_minutes,
-        rs.day AS day,
-        'routine' AS type,
-        r.id AS itemId,
-        r.title AS title
-      FROM routine_schedules rs
-      LEFT JOIN routines r ON rs.routineId = r.id
-
-      UNION ALL
-
-      SELECT 
         hs.start_minutes AS start_minutes,
         hs.end_minutes AS end_minutes,
         hs.day AS day,
