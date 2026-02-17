@@ -88,7 +88,42 @@ This makes the app behave like a **mini productivity operating system.**
 
 # 📂 Project Structure
 
-
+```
+rhythm/  
+│  
+├── assets/                     # Images, icons, screenshots  
+│  
+├── src/  
+│   ├── components/             # Reusable UI components  
+│   │   ├── HabitCard.jsx   
+│   │   ├── RoutineCard.jsx  
+│   │   ├── TaskCard.jsx  
+│   │  
+│   ├── database/               # SQLite layer
+│   │   ├── DatabaseSetup.js
+│   │
+│   ├── screens/                # App screens  
+│   │   ├── Dashboard.jsx    
+│   │   ├── EditHabit.jsx      
+│   │   ├── EditRoutine.jsx      
+│   │   ├── EditTask.jsx  
+│   │   ├── Habits.jsx      
+│   │   ├── HabitsStack.jsx      
+│   │   ├── Routines.jsx     
+│   │   ├── RoutinesStack.jsx      
+│   │   ├── Tasks.jsx      
+│   │   └── TasksStack.jsx      
+│   │    
+│   └── utils/                  # Helper functions  
+│   │   ├── notify.js  
+│   │   ├── quotes.js  
+│   │   └── scheduling.js  
+│  
+├── App.js                      # Root component  
+├── app.json  
+├── package.json  
+└── eas.json  
+```
 
 Architecture principles:
 - Clean separation of concerns
