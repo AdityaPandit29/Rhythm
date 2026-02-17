@@ -162,14 +162,28 @@ eas build -p android --profile preview
 
 # 📸 Screenshots
 
-## Example Structure
+## 🏠 Dashboard
+<p align="center">
+  <img src="assets/screenshots/dashboardOngoingHabit.jpeg" width="250"/>
+  <img src="assets/screenshots/dashboardLateHabit.jpeg" width="250"/>
+</p>
 
-```
-/assets/screenshots/home.png
-/assets/screenshots/habits.png
-/assets/screenshots/blocks.png
-/assets/screenshots/tasks.png
-```
+## 📅 Habits
+<p align="center">
+  <img src="assets/screenshots/habitsScreen.jpeg" width="250"/>
+</p>
+
+## ⏱ Routines
+<p align="center">
+  <img src="assets/screenshots/routinesScreen.jpeg" width="250"/>
+</p>
+
+## 📝 Tasks
+<p align="center">
+  <img src="assets/screenshots/tasksScreen.jpeg" width="250"/>
+  <img src="assets/screenshots/editTask.jpeg" width="250"/>
+</p>
+
 
 ---
 
