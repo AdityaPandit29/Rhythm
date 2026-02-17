@@ -136,7 +136,7 @@ Architecture principles:
 # 📦 Installation
 
 ```bash
-git clone <your-repo-link>
+git clone https://github.com/AdityaPandit29/Rhythm.git
 cd project-name
 npm install
 npx expo start
